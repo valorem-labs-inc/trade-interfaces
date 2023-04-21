@@ -5,21 +5,24 @@ import "seaport.proto";
 
 package quay;
 
-// Reference: https://github.com/valorem-labs-inc/valorem-core/blob/master/src/interfaces/IOptionSettlementEngine.sol#L223
-// Reference: https://github.com/Alcibiades-Capital/quay/blob/v0.2.0/docs/SequenceDiagrams.md#request-for-quote-rfq-json-data-structure
+// This set of protobuf definitions define the request for quote (RFQ) service and related message formats.
 
 service RFQ {
+    // Request quotes from makers via a single QuoteRequest message and receive a stream of QuoteResponse messages for use by gRPC-web clients.
     rpc WebTaker (QuoteRequest) returns (stream QuoteResponse);
+    // Request quotes from makers via a stream of QuoteRequest messages and receive a stream of QuoteResponse messages.
     rpc Taker (stream QuoteRequest) returns (stream QuoteResponse);
+    // Send quotes to takers via a stream of QuoteResponse messages and receive a stream of QuoteRequest messages.
     rpc Maker (stream QuoteResponse) returns (stream QuoteRequest);
 }
 
-// The taker requesting a quote is requesting a quote to buy or sell an asset
+// The Action enum specifies whether the taker is requesting a quote to buy or sell an asset.
 enum Action {
     BUY = 0;
     SELL = 1;
 }
 
+// The fields comprising the quote request message give the maker what they need to provide a quote/signed offer.
 message QuoteRequest {
     // Ideally the maker would never know who the taker is, and vice-versa.
     // However, seaport reveals the makers' address to the taker. traderAddress
@@ -35,6 +38,7 @@ message QuoteRequest {
     Action action = 8;
 }
 
+// The quote response message contains the quote/signed offer from the maker.
 message QuoteResponse {
     H128 ulid = 1;          // Optional
     H160 makerAddress = 2;  // Optional
