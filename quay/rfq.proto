@@ -5,42 +5,73 @@ import "seaport.proto";
 
 package quay;
 
-// This set of protobuf definitions define the request for quote (RFQ) service and related message formats.
+/**
+ * Request for quote (RFQ) services and related message formats.
+ */
 
 service RFQ {
-    // Request quotes from makers via a single QuoteRequest message and receive a stream of QuoteResponse messages for use by gRPC-web clients.
+    /** Request quotes from makers via a single QuoteRequest message and receive a stream of QuoteResponse messages for use by gRPC-web clients. */
     rpc WebTaker (QuoteRequest) returns (stream QuoteResponse);
-    // Request quotes from makers via a stream of QuoteRequest messages and receive a stream of QuoteResponse messages.
+    /** Request quotes from makers via a stream of QuoteRequest messages and receive a stream of QuoteResponse messages. */
     rpc Taker (stream QuoteRequest) returns (stream QuoteResponse);
-    // Send quotes to takers via a stream of QuoteResponse messages and receive a stream of QuoteRequest messages.
+    /** Send quotes to takers via a stream of QuoteResponse messages and receive a stream of QuoteRequest messages. */
     rpc Maker (stream QuoteResponse) returns (stream QuoteRequest);
 }
 
-// The Action enum specifies whether the taker is requesting a quote to buy or sell an asset.
+/** The Action enum specifies whether the taker is requesting a quote to buy or sell an asset. */
 enum Action {
     BUY = 0;
     SELL = 1;
 }
 
-// The fields comprising the quote request message give the maker what they need to provide a quote/signed offer.
+// TODO(Snake case variable names)
+/** The fields comprising the quote request message give the maker what they need to provide a quote/signed offer. */
 message QuoteRequest {
-    // Ideally the maker would never know who the taker is, and vice-versa.
-    // However, seaport reveals the makers' address to the taker. traderAddress
-    // Ensures there is no information asymmetry between the maker and taker.
-    // Thought the trader may not always end up being the taker
+    /** The unique identifier for the quote request. This is used to match the
+      * quote response to the quote request.
+     */
     H128 ulid = 1;                 // Optional
+
+    /** Ideally the maker would never know who the taker is, and vice-versa.
+      * However, seaport reveals the makers' address to the taker.
+      * takerAddress ensures there is no information asymmetry between
+      * the maker and taker. Thought the trader may not always end up being
+      * the taker.
+     */
     H160 takerAddress = 2;         // Optional
+
     ItemType itemType = 3;
+
+    // The token address for which a quote is being requested.
     H160 tokenAddress = 4;         // Optional
+
+    /** The identifier_or_criteria represents either the ERC721 or ERC1155
+     * token identifier or, in the case of a criteria-based item type, a
+     * merkle root composed of the valid set of token identifiers for
+     * the item. This value will be ignored for Ether and ERC20 item types,
+     * and can optionally be zero for criteria-based item types to allow
+     * for any identifier.
+     */
     H256 identifierOrCriteria = 5; // Optional
+
+    // TODO(Do we really need both of these?)
     H256 startAmount = 6;
     H256 endAmount = 7;
+
+    /** Is it a request to buy, or a request to sell? */
     Action action = 8;
 }
 
 // The quote response message contains the quote/signed offer from the maker.
 message QuoteResponse {
+    /** The unique identifier for the quote request. This is used to match the
+      * quote response to the quote request.
+     */
     H128 ulid = 1;          // Optional
+
+    /** The address of the maker making the offer. */
     H160 makerAddress = 2;  // Optional
+
+    /** The order and signature from the maker. */
     Order order = 3;
 }
