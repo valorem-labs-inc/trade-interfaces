@@ -2,25 +2,31 @@ syntax = "proto3";
 
 package session;
 
+/** Services and messages enabling EIP-4361 authentication via gRPC. */
+
+/** Reference: https://docs.login.xyz/ */
+
 service Session {
-  // Getting an EIP-4361 nonce for session
+  /** Returns an EIP-4361 nonce for session and invalidates existing session*/
   rpc Nonce (Empty) returns (NonceText);
 
-  // Verifying user EIP-4361 session
+  /** Verifies the SignedMessage is valid*/
   rpc Verify (VerifyText) returns (Empty);
 
-  // Checking user EIP-4361 authentication
+  /** Used to check if a given connection is authenticated */
   rpc Authenticate (Empty) returns (Empty);
 }
 
-// Nonce response message containing the generated `nonce` string.
+/** Nonce response message containing the generated `nonce` string. */
 message NonceText {
   string nonce = 1;
 }
 
-// Verify request message containing an JSON encoded string of the `SignedMessage` structure (src/auth).
+/** TODO(Should be Signed Message, and does it need to be json encoded in protobuf?) */
+/** Verify request message containing an JSON encoded string of the `SignedMessage` structure (src/auth). */
 message VerifyText {
   string body = 1;
 }
 
+/** The empty message */
 message Empty {}

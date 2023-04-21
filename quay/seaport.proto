@@ -4,9 +4,13 @@ import "types.proto";
 
 package quay;
 
-// Reference: https://docs.opensea.io/v2.0/reference/seaport-structs
-// Reference: https://docs.opensea.io/v2.0/reference/seaport-enums
+/** Messages to support the Seaport smart contract interface via protobuf. */
+// Reference: https://docs.opensea.io/reference/seaport-overview
 
+/** The ItemType designates the type of item, with valid types being Ether
+  * (or other native token for the given chain), ERC20, ERC721, ERC1155,
+  * ERC721 with "criteria" (explained below), and ERC1155 with criteria.
+  */
 enum ItemType {
     NATIVE = 0;
     ERC20 = 1;
@@ -16,8 +20,12 @@ enum ItemType {
     ERC1155_WITH_CRITERIA = 5;
 }
 
+/**
+ * This is and item required in exchange for an offer.
+ */
 message ConsiderationItem {
     ItemType item_type = 1;
+
     H160 token = 2;
     H256 identifier_or_criteria = 3; // uint256
     H256 start_amount = 4; // uint256
@@ -25,14 +33,56 @@ message ConsiderationItem {
     H160 recipient = 6;
 }
 
+/**
+  * This is an item offered in exchange for consideration.
+ */
 message OfferItem {
     ItemType item_type = 1;
+
+    /** The token designates the account of the item's token contract
+     * (with the null address used for Ether or other native tokens).
+     */
     H160 token = 2;
-    H256 identifier_or_criteria = 3; // uint256
-    H256 start_amount = 4; // uint256
+
+    /** The identifier_or_criteria represents either the ERC721 or ERC1155
+     * token identifier or, in the case of a criteria-based item type, a
+     * merkle root composed of the valid set of token identifiers for
+     * the item. This value will be ignored for Ether and ERC20 item types,
+     * and can optionally be zero for criteria-based item types to allow
+     * for any identifier.
+     */
+    H256 identifier_or_criteria = 3;
+
+    /** The start_amount represents the amount of the item in question that
+     * will be required should the order be fulfilled at the moment the
+     * order becomes active.
+     */
+
+    H256 start_amount = 4;
+
+    /** The end_amount represents the amount of the item in question that
+     * will be required should the order be fulfilled at the moment the
+     * order expires. If this value differs from the item's start_amount,
+     * the realized amount is calculated linearly based on the time elapsed
+     * since the order became active.
+     */
     H256 end_amount = 5; // uint256
 }
 
+/** The OrderType designates one of four types for the order depending on
+  * two distinct preferences:
+  *
+  * FULL indicates that the order does not support partial fills,
+  * whereas PARTIAL enables filling some fraction of the order, with the
+  * important caveat that each item must be cleanly divisible by the supplied
+  * fraction (i.e. no remainder after division).
+
+  * OPEN indicates that the call to execute the order can be submitted by
+  * any account, whereas RESTRICTED requires that the order either be executed
+  * by the offerer or the zone of the order, or that a magic value indicating
+  * that the order is approved is returned upon calling validateOrder on
+  * the zone.
+  */
 enum OrderType {
     FULL_OPEN = 0;
     PARTIAL_OPEN = 1;
@@ -40,21 +90,94 @@ enum OrderType {
     PARTIAL_RESTRICTED = 3;
 }
 
+/**  TODO(Rename to Order?) */
+/** Each order contains eleven key components */
 message OrderParameters {
+    /** The offerer of the order supplies all offered items and must either
+     * fulfill the order personally (i.e. msg.sender == offerer) or approve
+     * the order via signature (either standard 65-byte EDCSA, 64-byte
+     * EIP-2098, or an EIP-1271 isValidSignature check) or by listing
+     * the order on-chain (i.e. calling validate).
+     */
     H160 offerer = 1;
+
+    /** The zone of the order is an optional secondary account attached to the
+     * order with two additional privileges:
+     *
+     * The zone may cancel orders where it is named as the zone by calling
+     * cancel. (Note that offerers can also cancel their own orders, either
+     * individually or for all orders signed with their current counter at
+     * once by calling incrementCounter).
+     * "Restricted" orders (as specified by the order type) must either be
+     * executed by the zone or the offerer, or must be approved as indicated
+     * by a call to an validateOrder on the zone.
+     */
     H160 zone = 2;
+
+    /** The offers array contains an array of items that may be transferred
+     * from the offerer's account.
+     */
     repeated OfferItem offers = 3;
+
+    /** The consideration contains an array of items that must be received
+      * in order to fulfill the order. It contains all of the same components
+      * as an offered item, and additionally includes a recipient that will
+      * receive each item. This array may be extended by the fulfiller on
+      * order fulfillment so as to support "tipping" (e.g. relayer or
+      * referral payments)
+     */
     repeated ConsiderationItem considerations = 4;
+
     OrderType order_type = 5;
-    H256 start_time = 6; // uint256
-    H256 end_time = 7; // uint256
-    H256 zone_hash = 8; // bytes32
+
+    /** The start_time indicates the block timestamp at which the order
+      * becomes active.
+     */
+    H256 start_time = 6;
+
+    /** The end_time indicates the block timestamp at which the order expires.
+      * This value and the startTime are used in conjunction with the
+      * start_amount and end_amount of each item to derive their current amount.
+     */
+    H256 end_time = 7;
+
+    /** The zoneHash represents an arbitrary 32-byte value that will be
+      * supplied to the zone when fulfilling restricted orders that the zone
+      * can utilize when making a determination on whether to authorize the order.
+     */
+    H256 zone_hash = 8;
+
+    /** TODO(This can likely be computed and may not need to go over the wire) */
+    // This is the reason we have 12 params here, not 11
+    /** The total_original_consideration_items represents the total number of
+      * consideration items that were originally included in the order. This
+      * value is used to determine the number of consideration items that
+      * should be included in the fulfillment.
+     */
     H256 total_original_consideration_items = 9;
-    H256 salt = 10; // bytes32
-    H256 conduit_key = 11; // bytes32
+
+    /** The salt represents an arbitrary source of entropy for the order. */
+    H256 salt = 10;
+
+    /** The conduit_key is a bytes32 value that indicates what conduit,
+      * if any, should be utilized as a source for token approvals when
+      * performing transfers. By default (i.e. when conduitKey is set to the
+      * zero hash), the offerer will grant ERC20, ERC721, and ERC1155 token
+      * approvals to Seaport directly so that it can perform any transfers
+      * specified by the order during fulfillment. In contrast, an offerer
+      * that elects to utilize a conduit will grant token approvals to the
+      * conduit contract corresponding to the supplied conduit key, and
+      * Seaport will then instruct that conduit to transfer the respective
+      * tokens.
+     */
+    H256 conduit_key = 11;
+
+    /** TODO(This is counter on the opensea docs, but nonce on the contract call?) */
+    /** The nonce indicates a value that must match the current counter for the given offerer. */
     H256 nonce = 12;
 }
 
+/** TODO(Rename to signed order?) */
 message Order {
     OrderParameters parameters = 1;
     EthSignature signature = 2;
