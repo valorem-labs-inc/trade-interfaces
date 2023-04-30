@@ -57,7 +57,6 @@ message OfferItem {
      * will be required should the order be fulfilled at the moment the
      * order becomes active.
      */
-
     H256 start_amount = 4;
 
     /** The end_amount represents the amount of the item in question that
@@ -90,9 +89,8 @@ enum OrderType {
     PARTIAL_RESTRICTED = 3;
 }
 
-/**  TODO(Rename to Order?) */
-/** Each order contains eleven key components */
-message OrderParameters {
+/** Each order contains ten key components */
+message Order {
     /** The offerer of the order supplies all offered items and must either
      * fulfill the order personally (i.e. msg.sender == offerer) or approve
      * the order via signature (either standard 65-byte EDCSA, 64-byte
@@ -147,17 +145,8 @@ message OrderParameters {
      */
     H256 zone_hash = 8;
 
-    /** TODO(This can likely be computed and may not need to go over the wire) */
-    // This is the reason we have 12 params here, not 11
-    /** The total_original_consideration_items represents the total number of
-      * consideration items that were originally included in the order. This
-      * value is used to determine the number of consideration items that
-      * should be included in the fulfillment.
-     */
-    H256 total_original_consideration_items = 9;
-
     /** The salt represents an arbitrary source of entropy for the order. */
-    H256 salt = 10;
+    H256 salt = 9;
 
     /** The conduit_key is a bytes32 value that indicates what conduit,
       * if any, should be utilized as a source for token approvals when
@@ -170,15 +159,10 @@ message OrderParameters {
       * Seaport will then instruct that conduit to transfer the respective
       * tokens.
      */
-    H256 conduit_key = 11;
-
-    /** TODO(This is counter on the opensea docs, but nonce on the contract call?) */
-    /** The nonce indicates a value that must match the current counter for the given offerer. */
-    H256 nonce = 12;
+    H256 conduit_key = 10;
 }
 
-/** TODO(Rename to signed order?) */
-message Order {
-    OrderParameters parameters = 1;
+message SignedOrder {
+    Order parameters = 1;
     EthSignature signature = 2;
 }
