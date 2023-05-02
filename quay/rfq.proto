@@ -22,6 +22,7 @@ service RFQ {
 enum Action {
     BUY = 0;
     SELL = 1;
+    INVALID = 255;
 }
 
 // TODO(Snake case variable names)
