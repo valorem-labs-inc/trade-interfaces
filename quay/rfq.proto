@@ -22,9 +22,9 @@ service RFQ {
 enum Action {
     BUY = 0;
     SELL = 1;
+    INVALID = 255;
 }
 
-// TODO(Snake case variable names)
 /** The fields comprising the quote request message give the maker what they need to provide a quote/signed offer. */
 message QuoteRequest {
     /** The unique identifier for the quote request. This is used to match the
@@ -38,12 +38,12 @@ message QuoteRequest {
       * the maker and taker. Thought the trader may not always end up being
       * the taker.
      */
-    H160 takerAddress = 2;         // Optional
+    H160 taker_address = 2;         // Optional
 
-    ItemType itemType = 3;
+    ItemType item_type = 3;
 
     // The token address for which a quote is being requested.
-    H160 tokenAddress = 4;         // Optional
+    H160 token_address = 4;         // Optional
 
     /** The identifier_or_criteria represents either the ERC721 or ERC1155
      * token identifier or, in the case of a criteria-based item type, a
@@ -52,14 +52,14 @@ message QuoteRequest {
      * and can optionally be zero for criteria-based item types to allow
      * for any identifier.
      */
-    H256 identifierOrCriteria = 5; // Optional
+    H256 identifier_or_criteria = 5; // Optional
 
-    // TODO(Do we really need both of these?)
-    H256 startAmount = 6;
-    H256 endAmount = 7;
+    H256 amount = 6;
 
-    /** Is it a request to buy, or a request to sell? */
-    Action action = 8;
+    /** A request by the Taker to the Maker, i.e. if the request is Buy the Taker wants to buy the option from the
+     * Maker, whereas Sell is the Taker wanting to sell to the Maker.
+     */
+    Action action = 7;
 }
 
 // The quote response message contains the quote/signed offer from the maker.
@@ -70,8 +70,8 @@ message QuoteResponse {
     H128 ulid = 1;          // Optional
 
     /** The address of the maker making the offer. */
-    H160 makerAddress = 2;  // Optional
+    H160 maker_address = 2;  // Optional
 
     /** The order and signature from the maker. */
-    Order order = 3;
+    SignedOrder order = 3;
 }
