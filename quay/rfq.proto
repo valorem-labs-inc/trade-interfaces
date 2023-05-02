@@ -25,7 +25,6 @@ enum Action {
     INVALID = 255;
 }
 
-// TODO(Snake case variable names)
 /** The fields comprising the quote request message give the maker what they need to provide a quote/signed offer. */
 message QuoteRequest {
     /** The unique identifier for the quote request. This is used to match the
