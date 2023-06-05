@@ -1,63 +1,58 @@
-// sign in with ethereum https://docs.login.xyz/
-import { SiweMessage } from 'siwe';
-// gRPC connection packages https://connect.build/docs/node/using-clients
-import { createPromiseClient } from '@bufbuild/connect';  
-import { createGrpcTransport } from '@bufbuild/connect-node';
-// your favourite web3 library
-import * as ethers from 'ethers';
-// proto generate files
-import { Session } from '../gen/session_connect';
+import { createPromiseClient } from "@bufbuild/connect";
+import { createGrpcTransport } from "@bufbuild/connect-node";
+import { SiweMessage } from "siwe";
+import * as ethers from "ethers";
+import { Session } from "../gen/session_connect";
 
+const privateKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
-// wallet for signing. NOTE: this a a placeholder private key for testing, replace with taker RFQ signer
-const wallet = new ethers.Wallet('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80');
-// your favourite chain
-const NODE_ENDPOINT = 'https://rpc.ankr.com/arbitrum';
-const CHAIN_ID = 42161;  // Arbitrum One
-// Valorem Trade
+const CHAIN_ID = 42161; // Arbitrum One
 const gRPC_ENDPOINT = 'https://exchange.valorem.xyz';
-const DOMAIN = 'exchange.valorem.xyz';
+const DOMAIN = "exchange.valorem.xyz";
 
-
+var lastResponse: any;
+const trackResponse = (next: any) => async (req: any) => {
+  const res = await next(req);
+  lastResponse = res;
+  return res
+};
 const transport = createGrpcTransport({
   baseUrl: gRPC_ENDPOINT,
-  httpVersion: '2',
+  httpVersion: "2",
+  interceptors: [trackResponse]
 });
 
-
-async function main() {
-  // 1. Connect and authenticate with Valorem Trade API
+async function authenticateWithTrade() {
   const sessionClient = createPromiseClient(Session, transport);
+  const { nonce } = await sessionClient.nonce({});
+  const cookie = lastResponse.header.get('set-cookie').split(';')[0];
+  const wallet = new ethers.Wallet(privateKey);
 
-  const nonce = (await sessionClient.nonce({})).nonce;
-
-  const siweMessage = new SiweMessage({
+  const message = new SiweMessage({
     domain: DOMAIN,
     address: wallet.address,
     uri: gRPC_ENDPOINT,
     version: '1',
     chainId: CHAIN_ID,
-    nonce: nonce,
-    issuedAt: (new Date()).toISOString(),
-  });
-
-  const message = siweMessage.toMessage()
+    nonce,
+    issuedAt: new Date().toISOString(),
+  }).toMessage();
 
   const signature = await wallet.signMessage(message);
 
-  const body = JSON.stringify({
-    message: message,
-    signature: signature,
-  });
+  await sessionClient.verify(
+    {
+      body: JSON.stringify({
+        message: message,
+        signature: signature,
+      })
+    },
+    {headers: [['cookie', cookie]]},
+  );
 
-  const verify_response = await sessionClient.verify({
-    body: body,
-  });
+  await sessionClient.authenticate({}, {headers: [['cookie', cookie]]});
 
-
-
-
+  console.log('Client has authenticated with Valorem Trade!');
 }
 
-
-main();
+authenticateWithTrade();
