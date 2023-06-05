@@ -1,0 +1,18 @@
+{
+  "name": "exchange-proto",
+  "version": "1.0.0",
+  "repository": "https://github.com/valorem-labs-inc/exchange-proto.git",
+  "license": "MIT",
+  "dependencies": {
+    "@bufbuild/buf": "^1.20.0-1",
+    "@bufbuild/connect": "^0.9.1",
+    "@bufbuild/connect-node": "^0.9.1",
+    "@bufbuild/protobuf": "^1.2.1",
+    "@bufbuild/protoc-gen-connect-es": "^0.9.1",
+    "@bufbuild/protoc-gen-es": "^1.2.1",
+    "ethers": "^6.4.0",
+    "siwe": "^2.1.4",
+    "tsx": "^3.12.7",
+    "typescript": "^5.0.4"
+  }
+}
