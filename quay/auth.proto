@@ -12,10 +12,10 @@ service Auth {
   /** Returns an EIP-4361 nonce for session and invalidates existing session*/
   rpc Nonce (Empty) returns (NonceText);
 
-  /** Verifies the SignedMessage is valid*/
-  rpc Verify (VerifyText) returns (Empty);
+  /** Verifies the SignedMessage is valid and returns the verified address*/
+  rpc Verify (VerifyText) returns (H160);
 
-  /** Used to check if a given connection is authenticated, returns the address which is authenticated */
+  /** Used to check if a given connection is authenticated, returns the address which is authenticated for a nonce cookie*/
   rpc Authenticate (Empty) returns (H160);
 }
 
