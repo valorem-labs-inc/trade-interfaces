@@ -10,9 +10,12 @@
     "@bufbuild/protobuf": "^1.2.1",
     "@bufbuild/protoc-gen-connect-es": "^0.9.1",
     "@bufbuild/protoc-gen-es": "^1.2.1",
-    "ethers": "^6.4.0",
+    "@types/node": "^20.2.5",
+    "dotenv": "^16.1.4",
+    "ethers": "5.7",
     "siwe": "^2.1.4",
     "tsx": "^3.12.7",
-    "typescript": "^5.0.4"
+    "typescript": "^5.0.4",
+    "viem": "^1.0.0"
   }
 }

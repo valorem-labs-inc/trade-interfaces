@@ -61,12 +61,12 @@ import IValoremOptionsClearinghouse from '../abi/IValoremOptionsClearinghouse.js
 const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
 const VALOREM_CLEAR_ADDRESS = '0x7513F78472606625A9B505912e3C80762f6C9Efb';
 const underlyingAsset = '0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372';  // Wrapped ETH on Arb Goerli
-const exerciseAsset = '0x8FB1E3fC51F3b789dED7557E680551d93Ea9d892';  // USDC on Arb Goerli
+const exerciseAsset = '0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458';  // USDC on Arb Goerli
 
-async function createOption() {  
-  const provider = new ethers.JsonRpcProvider(NODE_ENDPOINT);
-  const signer = wallet.connect(provider);
+const provider = new ethers.providers.JsonRpcProvider(NODE_ENDPOINT);
+const signer = wallet.connect(provider);
 
+async function createOption() {
   const settlementContract = new ethers.Contract(VALOREM_CLEAR_ADDRESS, IValoremOptionsClearinghouse, signer);
 
   const underlyingAmount = BigInt(1 * 10**18);  // WETH = 18 decimals
@@ -78,16 +78,18 @@ async function createOption() {
   const exerciseTimestamp = (await provider.getBlock(blockNumber))?.timestamp || Math.floor(Date.now()/1000);
   const expiryTimestamp = exerciseTimestamp + SECONDS_IN_A_WEEK;
 
-  const optionId = (await settlementContract.newOptionType.staticCallResult(
+  const response = await settlementContract.newOptionType(
     underlyingAsset,
     underlyingAmount,
     exerciseAsset,
     exerciseAmount,
     exerciseTimestamp,
-    expiryTimestamp
-  ))[0];
+    expiryTimestamp,
+  );
+  const receipt = await response.wait();
+  const optionId = receipt.events[0].args['optionId'];
 
-  console.log('Created option with ID: ', optionId);
+  console.log('Created option with ID:', optionId.toString());
   return optionId;
 }
 
