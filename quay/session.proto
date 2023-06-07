@@ -1,6 +1,8 @@
 syntax = "proto3";
 
-package session;
+import "types.proto";
+
+package quay;
 
 /** Services and messages enabling EIP-4361 authentication via gRPC. */
 
@@ -13,8 +15,8 @@ service Session {
   /** Verifies the SignedMessage is valid*/
   rpc Verify (VerifyText) returns (Empty);
 
-  /** Used to check if a given connection is authenticated */
-  rpc Authenticate (Empty) returns (Empty);
+  /** Used to check if a given connection is authenticated, returns the address which is authenticated */
+  rpc Authenticate (Empty) returns (H160);
 }
 
 /** Nonce response message containing the generated `nonce` string. */
