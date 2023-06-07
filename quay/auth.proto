@@ -8,7 +8,7 @@ package quay;
 
 /** Reference: https://docs.login.xyz/ */
 
-service Session {
+service Auth {
   /** Returns an EIP-4361 nonce for session and invalidates existing session*/
   rpc Nonce (Empty) returns (NonceText);
 
