@@ -3,7 +3,7 @@ import { createPromiseClient } from '@bufbuild/connect';
 import { createGrpcTransport } from '@bufbuild/connect-node';
 import { SiweMessage } from 'siwe';
 import * as ethers from 'ethers';
-import { Session } from '@gen/quay/session_connect';
+import { Auth } from '@gen/quay/auth_connect';
 
 // replace with account to use for signing
 const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
@@ -32,8 +32,8 @@ const transport = createGrpcTransport({
 });
 
 async function authenticateWithTrade() {
-  const sessionClient = createPromiseClient(Session, transport);
-  const { nonce } = await sessionClient.nonce({});
+  const authClient = createPromiseClient(Auth, transport);
+  const { nonce } = await authClient.nonce({});
 
   // create SIWE message
   const message = new SiweMessage({
@@ -50,7 +50,7 @@ async function authenticateWithTrade() {
   const signature = await signer.signMessage(message);
 
   // verify with Valorem Trade
-  await sessionClient.verify(
+  await authClient.verify(
     {
       body: JSON.stringify({
         message: message,
@@ -61,7 +61,7 @@ async function authenticateWithTrade() {
   );
 
   // authenticate with Valorem Trade
-  await sessionClient.authenticate({}, {headers: [['cookie', cookie]]});
+  await authClient.authenticate({}, {headers: [['cookie', cookie]]});
 
   console.log('Client has authenticated with Valorem Trade!');
 }
