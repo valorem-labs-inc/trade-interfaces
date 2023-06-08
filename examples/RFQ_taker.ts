@@ -1,22 +1,30 @@
+// 1. Authenticate with Valorem Trade
 import { createPromiseClient } from '@bufbuild/connect';
 import { createGrpcTransport } from '@bufbuild/connect-node';
 import { SiweMessage } from 'siwe';
 import * as ethers from 'ethers';
 import { Session } from '../gen/session_connect';
 
+// replace with account to use for signing
 const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
-const wallet = new ethers.Wallet(PRIVATE_KEY);
+const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
+
+const provider = new ethers.providers.JsonRpcProvider(NODE_ENDPOINT);
+const signer = new ethers.Wallet(PRIVATE_KEY, provider);
 
 const CHAIN_ID = 421613;  // Arbitrum Goerli
 const gRPC_ENDPOINT = 'https://exchange.valorem.xyz';
 const DOMAIN = 'exchange.valorem.xyz';
 
-var lastResponse: any;
+var cookie: string;  // to be used for all server interactions
+// custom Connect interceptor for retrieving cookie
 const trackResponse = (next: any) => async (req: any) => {
   const res = await next(req);
-  lastResponse = res;
+  cookie = res.header?.get('set-cookie')?.split(';')[0] ?? cookie;
   return res
 };
+
+// transport for connection to Valorem Trade gRPC server
 const transport = createGrpcTransport({
   baseUrl: gRPC_ENDPOINT,
   httpVersion: '2',
@@ -26,11 +34,11 @@ const transport = createGrpcTransport({
 async function authenticateWithTrade() {
   const sessionClient = createPromiseClient(Session, transport);
   const { nonce } = await sessionClient.nonce({});
-  const cookie = lastResponse.header.get('set-cookie').split(';')[0];
 
+  // create SIWE message
   const message = new SiweMessage({
     domain: DOMAIN,
-    address: wallet.address,
+    address: signer.address,
     uri: gRPC_ENDPOINT,
     version: '1',
     chainId: CHAIN_ID,
@@ -38,8 +46,10 @@ async function authenticateWithTrade() {
     issuedAt: new Date().toISOString(),
   }).toMessage();
 
-  const signature = await wallet.signMessage(message);
+  // sign SIWE message
+  const signature = await signer.signMessage(message);
 
+  // verify with Valorem Trade
   await sessionClient.verify(
     {
       body: JSON.stringify({
@@ -50,27 +60,25 @@ async function authenticateWithTrade() {
     {headers: [['cookie', cookie]]},
   );
 
+  // authenticate with Valorem Trade
   await sessionClient.authenticate({}, {headers: [['cookie', cookie]]});
 
   console.log('Client has authenticated with Valorem Trade!');
 }
 
 
+// 2. Create an option on Valorem Clearinghouse
 import IValoremOptionsClearinghouse from '../abi/IValoremOptionsClearinghouse.json';
 
-const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
-const VALOREM_CLEAR_ADDRESS = '0x7513F78472606625A9B505912e3C80762f6C9Efb';
+const VALOREM_CLEAR_ADDRESS = '0x7513F78472606625A9B505912e3C80762f6C9Efb';  // Valorem Clearinghouse on Arb Goerli
 const underlyingAsset = '0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372';  // Wrapped ETH on Arb Goerli
 const exerciseAsset = '0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458';  // USDC on Arb Goerli
 
-const provider = new ethers.providers.JsonRpcProvider(NODE_ENDPOINT);
-const signer = wallet.connect(provider);
-
 async function createOption() {
-  const settlementContract = new ethers.Contract(VALOREM_CLEAR_ADDRESS, IValoremOptionsClearinghouse, signer);
+  const clearinghouseContract = new ethers.Contract(VALOREM_CLEAR_ADDRESS, IValoremOptionsClearinghouse, provider);
 
-  const underlyingAmount = BigInt(1 * 10**18);  // WETH = 18 decimals
-  const exerciseAmount = BigInt(2000 * 10**6);  // USDCs = 6 decimals  
+  const underlyingAmount = BigInt(1 * 10**18);  // 1 WETH, 18 decimals
+  const exerciseAmount = BigInt(2000 * 10**6);  // 2k USDC, 6 decimals  
 
   const blockNumber = await provider.getBlockNumber();
   const SECONDS_IN_A_WEEK = 60 * 60 * 24 * 7;
@@ -78,7 +86,7 @@ async function createOption() {
   const exerciseTimestamp = (await provider.getBlock(blockNumber))?.timestamp || Math.floor(Date.now()/1000);
   const expiryTimestamp = exerciseTimestamp + SECONDS_IN_A_WEEK;
 
-  const response = await settlementContract.newOptionType(
+  const optionId = await clearinghouseContract.connect(signer).newOptionType(
     underlyingAsset,
     underlyingAmount,
     exerciseAsset,
@@ -86,19 +94,53 @@ async function createOption() {
     exerciseTimestamp,
     expiryTimestamp,
   );
-  const receipt = await response.wait();
-  const optionId = receipt.events[0].args['optionId'];
 
   console.log('Created option with ID:', optionId.toString());
   return optionId;
 }
 
 
+// 3. Create an RFQ request
+import { RFQ } from '../gen/rfq_connect';
+import { Action, QuoteRequest } from '../gen/rfq_pb';
+import { ItemType } from '../gen/seaport_pb';
+import { toH160, toH256 } from '../lib/fromBNToH';
+
+async function createRequest(optionId: ethers.BigNumber) {
+  const rfqClient = createPromiseClient(RFQ, transport);
+
+  // create an option buy quote request 
+  const request = new QuoteRequest({
+    ulid: undefined,
+    takerAddress: toH160(signer.address),
+    itemType: ItemType.NATIVE,
+    tokenAddress: toH160(VALOREM_CLEAR_ADDRESS),
+    identifierOrCriteria: toH256(optionId),
+    amount: toH256(BigInt(5)),
+    action: Action.BUY
+  });
+
+  // create your own quote request and response stream handling logic here
+  const requestStream = async function* () {
+    yield request;
+  };
+
+  const responseStream = rfqClient.taker(
+    requestStream(), 
+    {headers: [['cookie', cookie]]}
+  );
+
+  for await (const response of responseStream) {
+    console.log(response);
+  }
+};
+
+
 async function main(){
 
   await authenticateWithTrade();
   const optionId = await createOption();
-
+  await createRequest(optionId);
 
 }
 
