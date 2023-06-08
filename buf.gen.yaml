@@ -2,7 +2,7 @@ version: v1
 plugins:
   - plugin: es
     opt: target=ts,import_extension=none
-    out: gen
+    out: gen/quay
   - plugin: connect-es
     opt: target=ts,import_extension=none
-    out: gen
+    out: gen/quay

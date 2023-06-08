@@ -3,7 +3,7 @@ import { createPromiseClient } from '@bufbuild/connect';
 import { createGrpcTransport } from '@bufbuild/connect-node';
 import { SiweMessage } from 'siwe';
 import * as ethers from 'ethers';
-import { Session } from '../gen/session_connect';
+import { Session } from '@gen/quay/session_connect';
 
 // replace with account to use for signing
 const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
@@ -101,9 +101,9 @@ async function createOption() {
 
 
 // 3. Create an RFQ response
-import { RFQ } from '../gen/rfq_connect';
-import { QuoteResponse } from '../gen/rfq_pb';
-import { toH160} from '../lib/fromBNToH';
+import { RFQ } from '@gen/quay/rfq_connect';
+import { QuoteResponse } from '@gen/quay/rfq_pb';
+import { toH160} from './lib/fromBNToH';
 
 async function createResponse(optionId: ethers.BigNumber) {
   const rfqClient = createPromiseClient(RFQ, transport);
