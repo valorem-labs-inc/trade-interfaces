@@ -18,7 +18,7 @@ const DOMAIN = 'exchange.valorem.xyz';
 
 var cookie: string;  // to be used for all server interactions
 // custom Connect interceptor for retrieving cookie
-const trackResponse = (next: any) => async (req: any) => {
+const trackCookie= (next: any) => async (req: any) => {
   const res = await next(req);
   cookie = res.header?.get('set-cookie')?.split(';')[0] ?? cookie;
   return res
@@ -28,7 +28,7 @@ const trackResponse = (next: any) => async (req: any) => {
 const transport = createGrpcTransport({
   baseUrl: gRPC_ENDPOINT,
   httpVersion: '2',
-  interceptors: [trackResponse]
+  interceptors: [trackCookie]
 });
 
 async function authenticateWithTrade() {
