@@ -1,3 +1,10 @@
+import * as dotenv from 'dotenv';
+dotenv.config();
+const gRPC_ENDPOINT = 'https://localhost:8000';
+const DOMAIN = 'localhost.com';
+const NODE_ENDPOINT = 'http://localhost:8545';
+const PRIVATE_KEY = process.env.PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+
 // 1. Authenticate with Valorem Trade
 import { createPromiseClient } from '@bufbuild/connect';
 import { createGrpcTransport } from '@bufbuild/connect-node';
@@ -6,16 +13,15 @@ import * as ethers from 'ethers';  // v5.5.0
 import { Session } from '../../../gen/quay/session_connect';  // generated from auth.proto
 
 // replace with account to use for signing
-
-const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
-const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
+// const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+// const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
 
 const provider = new ethers.providers.JsonRpcProvider(NODE_ENDPOINT);
 const signer = new ethers.Wallet(PRIVATE_KEY, provider);
 
 const CHAIN_ID = 421613;  // Arbitrum Goerli
-const gRPC_ENDPOINT = 'https://exchange.valorem.xyz';
-const DOMAIN = 'exchange.valorem.xyz';
+// const gRPC_ENDPOINT = 'https://exchange.valorem.xyz';
+// const DOMAIN = 'exchange.valorem.xyz';
 
 var cookie: string;  // to be used for all server interactions
 // custom Connect interceptor for retrieving cookie
@@ -87,7 +93,7 @@ async function createOption() {
   const exerciseTimestamp = (await provider.getBlock(blockNumber))?.timestamp || Math.floor(Date.now()/1000);
   const expiryTimestamp = exerciseTimestamp + SECONDS_IN_A_WEEK;
 
-  const optionId = await clearinghouseContract.connect(signer).newOptionType(
+  const optionId = await clearinghouseContract.callStatic.newOptionType(
     underlyingAsset,
     underlyingAmount,
     exerciseAsset,
@@ -95,20 +101,27 @@ async function createOption() {
     exerciseTimestamp,
     expiryTimestamp,
   );
+  // const optionId = await clearinghouseContract.connect(signer).newOptionType(
+  //   underlyingAsset,
+  //   underlyingAmount,
+  //   exerciseAsset,
+  //   exerciseAmount,
+  //   exerciseTimestamp,
+  //   expiryTimestamp,
+  // );
 
   console.log('Created option with ID:', optionId.toString());
   return optionId;
 }
 
 
-// 3. Create an RFQ request
-import { Duplex } from 'node:stream';
+// 3. Send RFQ requests
 import { RFQ } from '../../../gen/quay/rfq_connect';  // generated from rfq.proto
 import { Action, QuoteRequest } from '../../../gen/quay/rfq_pb';  // generated from rfq.proto
 import { ItemType } from '../../../gen/quay/seaport_pb';  // generated from seaport.proto
 import { toH160, toH256 } from './lib/fromBNToH';
 
-async function createRequest(optionId: ethers.BigNumber) {
+async function sendRfqRequests(optionId: ethers.BigNumber) {
   const rfqClient = createPromiseClient(RFQ, transport);
 
   // create an option buy quote request 
@@ -151,7 +164,7 @@ async function main(){
 
   await authenticateWithTrade();
   const optionId = await createOption();
-  await createRequest(optionId);
+  await sendRfqRequests(optionId);
 
 }
 
