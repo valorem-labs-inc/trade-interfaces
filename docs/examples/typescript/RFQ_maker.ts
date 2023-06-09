@@ -83,33 +83,25 @@ async function respondToRfqs() {
 
   // create your own quote request and response stream handling logic here
 
-  const emptyResponse = new QuoteResponse({ 
-    ulid: undefined,
-    makerAddress: toH160(signer.address),
-    order: undefined,
-  });
+  const emptyResponse = new QuoteResponse();
   var emptyResponseStream = async function* () {
     yield emptyResponse;
   };
 
-  // continuously listen for requests and send responses
   console.log('Listening for RFQs...');
-  while (true) {
+  while (true){
     
     const requestStream = rfqClient.maker(
       emptyResponseStream(), 
       {headers: [['cookie', cookie]]}
     );
 
+    
     for await (const request of requestStream) {
       console.log('Received request:', request);
       // Handle the request here
-    }
-
-    // checks for requests every 2 seconds
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    
-  };
+    };
+  }
 
 };
 
