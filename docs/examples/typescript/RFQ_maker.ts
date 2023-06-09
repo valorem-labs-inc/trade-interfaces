@@ -10,7 +10,7 @@ import { createPromiseClient } from '@bufbuild/connect';
 import { createGrpcTransport } from '@bufbuild/connect-node';
 import { SiweMessage } from 'siwe';
 import * as ethers from 'ethers';  // v5.5.0
-import { Session } from '../../../gen/quay/session_connect';  // generated from auth.proto
+import { Auth } from '../../../gen/trade/auth_connect';  // generated from auth.proto
 
 // replace with account to use for signing
 // const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
@@ -39,7 +39,7 @@ const transport = createGrpcTransport({
 });
 
 async function authenticateWithTrade() {
-  const authClient = createPromiseClient(Session, transport);
+  const authClient = createPromiseClient(Auth, transport);
   const { nonce } = await authClient.nonce({});
 
   // create SIWE message
@@ -74,8 +74,8 @@ async function authenticateWithTrade() {
 }
 
 // 2. Listen for RFQs and respond with offers
-import { RFQ } from '../../../gen/quay/rfq_connect';  // generated from rfq.proto
-import { QuoteResponse } from '../../../gen/quay/rfq_pb';  // generated from rfq.proto
+import { RFQ } from '../../../gen/trade/rfq_connect';  // generated from rfq.proto
+import { QuoteResponse } from '../../../gen/trade/rfq_pb';  // generated from rfq.proto
 import { toH160 } from './lib/fromBNToH';
 
 async function respondToRfqs() {

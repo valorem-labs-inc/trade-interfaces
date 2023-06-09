@@ -1,7 +1,7 @@
 import type { BigNumberish } from 'ethers';
 import { BigNumber } from 'ethers';
 
-import { H40, H96, H128, H160, H256 } from '../../../../gen/quay/types_pb';
+import { H40, H96, H128, H160, H256 } from '../../../../gen/trade/types_pb';
 
 export const toH40 = (value: BigNumberish): H40 => {
   const bn = BigNumber.from(value);

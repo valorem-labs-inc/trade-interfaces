@@ -10,7 +10,7 @@ import { createPromiseClient } from '@bufbuild/connect';
 import { createGrpcTransport } from '@bufbuild/connect-node';
 import { SiweMessage } from 'siwe';
 import * as ethers from 'ethers';  // v5.5.0
-import { Session } from '../../../gen/quay/session_connect';  // generated from auth.proto
+import { Auth } from '../../../gen/trade/auth_connect';  // generated from auth.proto
 
 // replace with account to use for signing
 // const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
@@ -39,7 +39,7 @@ const transport = createGrpcTransport({
 });
 
 async function authenticateWithTrade() {
-  const authClient = createPromiseClient(Session, transport);
+  const authClient = createPromiseClient(Auth, transport);
   const { nonce } = await authClient.nonce({});
 
   // create SIWE message
@@ -116,9 +116,9 @@ async function createOption() {
 
 
 // 3. Send RFQ requests
-import { RFQ } from '../../../gen/quay/rfq_connect';  // generated from rfq.proto
-import { Action, QuoteRequest } from '../../../gen/quay/rfq_pb';  // generated from rfq.proto
-import { ItemType } from '../../../gen/quay/seaport_pb';  // generated from seaport.proto
+import { RFQ } from '../../../gen/trade/rfq_connect';  // generated from rfq.proto
+import { Action, QuoteRequest } from '../../../gen/trade/rfq_pb';  // generated from rfq.proto
+import { ItemType } from '../../../gen/trade/seaport_pb';  // generated from seaport.proto
 import { toH160, toH256 } from './lib/fromBNToH';
 
 async function sendRfqRequests(optionId: ethers.BigNumber) {
@@ -131,13 +131,13 @@ async function sendRfqRequests(optionId: ethers.BigNumber) {
     itemType: ItemType.NATIVE,
     tokenAddress: toH160(VALOREM_CLEAR_ADDRESS),
     identifierOrCriteria: toH256(optionId),
-    amount: toH256(BigInt(5)),
+    amount: toH256(ethers.BigNumber.from(5)),
     action: Action.BUY
   });
 
   // continuously send requests and handle responses
   console.log('Sending RFQ requests...');
-  // while (true) {
+  while (true) {
     // create your own quote request and response stream handling logic here
     const requestStream = async function* () {
       yield request;
@@ -156,7 +156,7 @@ async function sendRfqRequests(optionId: ethers.BigNumber) {
     // sends request out every 2 seconds
     await new Promise((resolve) => setTimeout(resolve, 2000));
     
-  // };
+  };
 
 };
 
