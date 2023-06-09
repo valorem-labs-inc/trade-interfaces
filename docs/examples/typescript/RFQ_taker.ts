@@ -137,7 +137,7 @@ async function sendRfqRequests(optionId: ethers.BigNumber) {
 
   // continuously send requests and handle responses
   console.log('Sending RFQ requests...');
-  while (true) {
+  // while (true) {
     // create your own quote request and response stream handling logic here
     const requestStream = async function* () {
       yield request;
@@ -156,7 +156,7 @@ async function sendRfqRequests(optionId: ethers.BigNumber) {
     // sends request out every 2 seconds
     await new Promise((resolve) => setTimeout(resolve, 2000));
     
-  };
+  // };
 
 };
 

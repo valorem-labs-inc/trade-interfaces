@@ -96,10 +96,11 @@ async function respondToRfqs() {
       {headers: [['cookie', cookie]]}
     );
 
-    
     for await (const request of requestStream) {
       console.log('Received request:', request);
-      // Handle the request here
+      // Handle the QuoteRequest here
+
+      
     };
   }
 
