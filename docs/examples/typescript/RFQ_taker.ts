@@ -3,9 +3,10 @@ import { createPromiseClient } from '@bufbuild/connect';
 import { createGrpcTransport } from '@bufbuild/connect-node';
 import { SiweMessage } from 'siwe';
 import * as ethers from 'ethers';  // v5.5.0
-import { Auth } from '@gen/quay/auth_connect';  // generated from auth.proto
+import { Session } from '../../../gen/quay/session_connect';  // generated from auth.proto
 
 // replace with account to use for signing
+
 const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
 
@@ -32,7 +33,7 @@ const transport = createGrpcTransport({
 });
 
 async function authenticateWithTrade() {
-  const authClient = createPromiseClient(Auth, transport);
+  const authClient = createPromiseClient(Session, transport);
   const { nonce } = await authClient.nonce({});
 
   // create SIWE message
@@ -101,9 +102,10 @@ async function createOption() {
 
 
 // 3. Create an RFQ request
-import { RFQ } from '@gen/quay/rfq_connect';  // generated from rfq.proto
-import { Action, QuoteRequest } from '@gen/quay/rfq_pb';  // generated from rfq.proto
-import { ItemType } from '@gen/quay/seaport_pb';  // generated from seaport.proto
+import { Duplex } from 'node:stream';
+import { RFQ } from '../../../gen/quay/rfq_connect';  // generated from rfq.proto
+import { Action, QuoteRequest } from '../../../gen/quay/rfq_pb';  // generated from rfq.proto
+import { ItemType } from '../../../gen/quay/seaport_pb';  // generated from seaport.proto
 import { toH160, toH256 } from './lib/fromBNToH';
 
 async function createRequest(optionId: ethers.BigNumber) {
@@ -120,19 +122,28 @@ async function createRequest(optionId: ethers.BigNumber) {
     action: Action.BUY
   });
 
-  // create your own quote request and response stream handling logic here
-  const requestStream = async function* () {
-    yield request;
+  // continuously send requests and handle responses
+  while (true) {
+    // create your own quote request and response stream handling logic here
+    const requestStream = async function* () {
+      yield request;
+    };
+
+    const responseStream = rfqClient.taker(
+      requestStream(), 
+      {headers: [['cookie', cookie]]}
+    );
+
+    for await (const response of responseStream) {
+      console.log('Received response:', response);
+      // Handle the response here
+    }
+
+    // sends request out every 2 seconds
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    
   };
 
-  const responseStream = rfqClient.taker(
-    requestStream(), 
-    {headers: [['cookie', cookie]]}
-  );
-
-  for await (const response of responseStream) {
-    console.log(response);
-  }
 };
 
 
