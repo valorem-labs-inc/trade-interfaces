@@ -136,6 +136,7 @@ async function sendRfqRequests(optionId: ethers.BigNumber) {
   });
 
   // continuously send requests and handle responses
+  console.log('Sending RFQ requests...');
   while (true) {
     // create your own quote request and response stream handling logic here
     const requestStream = async function* () {

@@ -93,6 +93,7 @@ async function respondToRfqs() {
   };
 
   // continuously listen for requests and send responses
+  console.log('Listening for RFQs...');
   while (true) {
     
     const requestStream = rfqClient.maker(
@@ -109,7 +110,7 @@ async function respondToRfqs() {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     
   };
-  
+
 };
 
 
