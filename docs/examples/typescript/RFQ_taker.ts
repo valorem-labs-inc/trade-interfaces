@@ -1,3 +1,10 @@
+import * as dotenv from 'dotenv';
+dotenv.config();
+const gRPC_ENDPOINT = 'https://localhost:8000';
+const DOMAIN = 'localhost.com';
+const NODE_ENDPOINT = 'http://localhost:8545';
+const PRIVATE_KEY = process.env.PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+
 // 1. Authenticate with Valorem Trade
 import { createPromiseClient } from '@bufbuild/connect';
 import { createGrpcTransport } from '@bufbuild/connect-node';
@@ -6,15 +13,15 @@ import * as ethers from 'ethers';  // v5.5.0
 import { Auth } from '../../../gen/trade/auth_connect';  // generated from auth.proto
 
 // replace with account to use for signing
-const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
-const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
+// const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+// const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
 
 const provider = new ethers.providers.JsonRpcProvider(NODE_ENDPOINT);
 const signer = new ethers.Wallet(PRIVATE_KEY, provider);
 
 const CHAIN_ID = 421613;  // Arbitrum Goerli
-const gRPC_ENDPOINT = 'https://exchange.valorem.xyz';
-const DOMAIN = 'exchange.valorem.xyz';
+// const gRPC_ENDPOINT = 'https://exchange.valorem.xyz';
+// const DOMAIN = 'exchange.valorem.xyz';
 
 var cookie: string;  // to be used for all server interactions
 // custom Connect interceptor for retrieving cookie
@@ -86,7 +93,17 @@ async function createOption() {
   const exerciseTimestamp = (await provider.getBlock(blockNumber))?.timestamp || Math.floor(Date.now()/1000);
   const expiryTimestamp = exerciseTimestamp + SECONDS_IN_A_WEEK;
 
-  const txResponse = await clearinghouseContract.connect(signer).newOptionType(
+  // const txResponse = await clearinghouseContract.connect(signer).newOptionType(
+  //   underlyingAsset,
+  //   underlyingAmount,
+  //   exerciseAsset,
+  //   exerciseAmount,
+  //   exerciseTimestamp,
+  //   expiryTimestamp,
+  // );
+  // const txReceipt = await txResponse.wait();
+  // const optionId = txReceipt.events.find((event: any) => event.event === 'NewOptionType').args.optionId;
+  const optionId = await clearinghouseContract.callStatic.newOptionType(
     underlyingAsset,
     underlyingAmount,
     exerciseAsset,
@@ -94,8 +111,6 @@ async function createOption() {
     exerciseTimestamp,
     expiryTimestamp,
   );
-  const txReceipt = await txResponse.wait();
-  const optionId = txReceipt.events.find((event: any) => event.event === 'NewOptionType').args.optionId;
 
   console.log('Created option with ID:', optionId.toString());
   return optionId;
@@ -113,13 +128,12 @@ async function sendRfqRequests(optionId: ethers.BigNumber) {
 
   // create an option buy quote request 
   const request = new QuoteRequest({
-    ulid: undefined,
     takerAddress: toH160(signer.address),
-    itemType: ItemType.NATIVE,
-    tokenAddress: toH160(VALOREM_CLEAR_ADDRESS),
-    identifierOrCriteria: toH256(optionId),
-    amount: toH256(ethers.BigNumber.from(5)),
-    action: Action.BUY
+    itemType: ItemType.ERC1155,  // seaport consideration ItemType
+    tokenAddress: toH160(VALOREM_CLEAR_ADDRESS),  // clearing house is options token contract
+    identifierOrCriteria: toH256(optionId),  // token id of the option
+    amount: toH256(ethers.BigNumber.from(5)),  // 5 options
+    action: Action.BUY  
   });
 
   // continuously send requests and handle responses
