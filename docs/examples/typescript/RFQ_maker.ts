@@ -98,36 +98,50 @@ async function respondToRfqs() {
   while (true) {
     for await (const quoteRequest of rfqClient.maker(emptyQuoteResponseStream(), {headers: [['cookie', cookie]]})) {
 
-      console.log('Received QuoteRequest:');
-      console.log(quoteRequest);
+      console.log('Received a Quote Request.');
 
-      if (quoteRequest.action !== Action.BUY) { continue };  // only responding to buy requests
+      if (quoteRequest.action !== Action.BUY) { 
+        console.log('Skipping Quote Request because it is not a buy request.');
+        continue;
+      };  // only responding to buy requests
 
-      const optionType = quoteRequest.identifierOrCriteria
-        ? fromH256(quoteRequest.identifierOrCriteria)
-        : (() => { throw new Error('QuoteRequest "identifierOrCriteria" is undefined.') })(); 
+      if (!quoteRequest.identifierOrCriteria) {
+        console.log('Skipping Quote Request because "identifierOrCriteria" is undefined.');
+      };
+      const optionType = fromH256(quoteRequest.identifierOrCriteria);
 
-      const optionAmount = quoteRequest.amount
-        ? fromH256(quoteRequest.amount)
-        : (() => { throw new Error('QuoteRequest "amount" is undefined.') })();
+      if (!quoteRequest.amount) {
+        console.log('Skipping Quote Request because "amount" is undefined.');
+      };
+      const optionAmount = fromH256(quoteRequest.amount);
+
+      console.log('Responding to Quote Request for', optionAmount.toString(), 'options with ID' + optionType.toString());
 
       const clearinghouseContract = new ethers.Contract(VALOREM_CLEAR_ADDRESS, IValoremOptionsClearinghouse, provider);
 
       // get option info
       const optionInfo = await clearinghouseContract.option(optionType);
+      console.log('Option info:');
+      console.log(optionInfo);
       
       // approve clearing house transfer of underlying asset
       const underlyingERC20 = new ethers.Contract(optionInfo.underlyingAsset, IERC20abi, provider);
       const approveTxReceipt = await (await underlyingERC20.connect(signer).approve(VALOREM_CLEAR_ADDRESS, optionInfo.underlyingAmount.mul(optionAmount))).wait();
-      if (approveTxReceipt.status == 0) { throw new Error('Underlying ERC20 approval failed.') };
+      if (approveTxReceipt.status == 0) { 
+        console.log('Skipping responding to RFQ; Underlying ERC20 approval failed.');
+        continue;
+      };
 
       // write option with clearing house
       const writeTxReceipt = await (await clearinghouseContract.connect(signer).write(optionType, optionAmount)).wait();
-      if (writeTxReceipt.status == 0) { throw new Error('Writing option with clearing house failed.') };
+      if (writeTxReceipt.status == 0) { 
+        console.log('Skipping responding to RFQ; Writing option with clearing house failed.');
+        continue;
+      };
       const writeEvent = writeTxReceipt.events.find((event: any) => event.event === 'OptionsWritten');
       const [optionId, claimId] = [writeEvent.args.optionId, writeEvent.args.claimId];
 
-      // Construct Seaport Offer
+      // Construct Seaport Offer:
       // Option we are offering
       const offerItem = {
         itemType: ItemType.ERC1155,
@@ -150,7 +164,7 @@ async function respondToRfqs() {
       const now = (await provider.getBlock(await provider.getBlockNumber())).timestamp;
       const in_30_mins = now + 30 * 60;
       const counter = await seaportContract.getCounter(signer.address);
-      const salt = `0x${Buffer.from(ethers.utils.randomBytes(8)).toString("hex").padStart(64, "0")}`
+      const salt = `0x${Buffer.from(ethers.utils.randomBytes(8)).toString('hex').padStart(64, '0')}`
       // order parameters, see https://arbiscan.io/address/0x00000000006c3852cbEf3e08E8dF289169EdE581#code#F4#L1
       const orderComponents = {
         offerer: signer.address,
@@ -169,32 +183,32 @@ async function respondToRfqs() {
       // create order signature
       const ORDER_TYPES = {
         OrderComponents: [
-          { name: "offerer", type: "address" },
-          { name: "zone", type: "address" },
-          { name: "offer", type: "OfferItem[]" },
-          { name: "consideration", type: "ConsiderationItem[]" },
-          { name: "orderType", type: "uint8" },
-          { name: "startTime", type: "uint256" },
-          { name: "endTime", type: "uint256" },
-          { name: "zoneHash", type: "bytes32" },
-          { name: "salt", type: "uint256" },
-          { name: "conduitKey", type: "bytes32" },
-          { name: "counter", type: "uint256" },
+          { name: 'offerer', type: 'address' },
+          { name: 'zone', type: 'address' },
+          { name: 'offer', type: 'OfferItem[]' },
+          { name: 'consideration', type: 'ConsiderationItem[]' },
+          { name: 'orderType', type: 'uint8' },
+          { name: 'startTime', type: 'uint256' },
+          { name: 'endTime', type: 'uint256' },
+          { name: 'zoneHash', type: 'bytes32' },
+          { name: 'salt', type: 'uint256' },
+          { name: 'conduitKey', type: 'bytes32' },
+          { name: 'counter', type: 'uint256' },
         ],
         OfferItem: [
-          { name: "itemType", type: "uint8" },
-          { name: "token", type: "address" },
-          { name: "identifierOrCriteria", type: "uint256" },
-          { name: "startAmount", type: "uint256" },
-          { name: "endAmount", type: "uint256" },
+          { name: 'itemType', type: 'uint8' },
+          { name: 'token', type: 'address' },
+          { name: 'identifierOrCriteria', type: 'uint256' },
+          { name: 'startAmount', type: 'uint256' },
+          { name: 'endAmount', type: 'uint256' },
         ],
         ConsiderationItem: [
-          { name: "itemType", type: "uint8" },
-          { name: "token", type: "address" },
-          { name: "identifierOrCriteria", type: "uint256" },
-          { name: "startAmount", type: "uint256" },
-          { name: "endAmount", type: "uint256" },
-          { name: "recipient", type: "address" },
+          { name: 'itemType', type: 'uint8' },
+          { name: 'token', type: 'address' },
+          { name: 'identifierOrCriteria', type: 'uint256' },
+          { name: 'startAmount', type: 'uint256' },
+          { name: 'endAmount', type: 'uint256' },
+          { name: 'recipient', type: 'address' },
         ],
       };
       // see https://docs.ethers.org/v5/api/signer/#Signer-signTypedData
@@ -254,7 +268,7 @@ async function respondToRfqs() {
         order: signedOrder_H,
       });
 
-      console.log('Sending QuoteResponse:');
+      console.log('Sending Quote Response with price of', USDCprice.toString(), 'USDC for', optionAmount.toString(), 'options.');
       console.log(quoteResponse);
 
       // send response over RFQ service

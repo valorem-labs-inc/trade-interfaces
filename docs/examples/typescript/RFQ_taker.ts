@@ -103,7 +103,8 @@ async function createOption() {
   const typeOfToken = await clearinghouseContract.tokenType(optionId);
   // if it does not exist, create it
   if (typeOfToken == 0) { 
-    console.log('Creating option with clearing house. Option type:');
+    console.log('Initializing option type with clearing house.');
+    console.log('Option info:');
     console.log(option);
     const newOptionTxReceipt = await (await clearinghouseContract.connect(signer).newOptionType(
       underlyingAsset,
@@ -209,7 +210,7 @@ async function sendRfqRequests(optionId: ethers.BigNumber) {
       };
 
       // assumes start and end amount are equal
-      if (considerationItem.startAmount.gt(ethers.utils.parseUnits('200', 6))) { continue };  // only accept price less than 200 USDC 
+      if (considerationItem.startAmount.gt(ethers.utils.parseUnits('200', 6))) { continue };  // only accept price less than 200 USDC for 5 options
 
       console.log('Accepting quote to buy option for', ethers.utils.formatUnits(considerationItem.startAmount, 6) , 'USDC and executing order on seaport.');
 
