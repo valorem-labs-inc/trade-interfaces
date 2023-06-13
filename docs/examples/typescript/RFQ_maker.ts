@@ -1,9 +1,3 @@
-import * as dotenv from 'dotenv';
-dotenv.config();
-const gRPC_ENDPOINT = 'https://localhost:8000';
-const DOMAIN = 'localhost.com';
-const NODE_ENDPOINT = 'http://localhost:8545';
-const PRIVATE_KEY = process.env.PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 // 1. Authenticate with Valorem Trade
 import { createPromiseClient } from '@bufbuild/connect';
 import { createGrpcTransport } from '@bufbuild/connect-node';
@@ -12,14 +6,14 @@ import * as ethers from 'ethers';  // v5.5.0
 import { Auth } from '../../../gen/trade/auth_connect';  // generated from auth.proto
 
 // replace with account to use for signing
-// const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
-// const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
+const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
 
 const provider = new ethers.providers.JsonRpcProvider(NODE_ENDPOINT);
 const signer = new ethers.Wallet(PRIVATE_KEY, provider);
 
-// const gRPC_ENDPOINT = 'https://exchange.valorem.xyz';
-// const DOMAIN = 'exchange.valorem.xyz';
+const gRPC_ENDPOINT = 'https://exchange.valorem.xyz';
+const DOMAIN = 'exchange.valorem.xyz';
 
 var cookie: string;  // to be used for all server interactions
 // custom Connect interceptor for retrieving cookie
@@ -83,10 +77,10 @@ import ISeaport from '../abi/ISeaport.json';
 import { EthSignature } from '../../../gen/trade/types_pb';
 
 
-const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581';
-
+const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581';  // seaport 1.1
 const VALOREM_CLEAR_ADDRESS = '0x7513F78472606625A9B505912e3C80762f6C9Efb';  // Valorem Clearinghouse on Arb Goerli
 const USDC_ADDRESS = '0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458';  // USDC on Arb Goerli
+
 
 async function respondToRfqs() {
   const seaportContract = new ethers.Contract(SEAPORT_ADDRESS, ISeaport, signer);
@@ -101,18 +95,14 @@ async function respondToRfqs() {
   };
 
   console.log('Listening for RFQs...');
-  while (true) {
-    
-    const quoteRequestStream = rfqClient.maker(
-      emptyQuoteResponseStream(), 
-      {headers: [['cookie', cookie]]}
-    );
 
-    for await (const quoteRequest of quoteRequestStream) {
+  while (true) {
+    for await (const quoteRequest of rfqClient.maker(emptyQuoteResponseStream(), {headers: [['cookie', cookie]]})) {
+
       console.log('Received QuoteRequest:');
       console.log(quoteRequest);
 
-      if (quoteRequest.action !== Action.BUY) { continue };  // only responding to buy requests};
+      if (quoteRequest.action !== Action.BUY) { continue };  // only responding to buy requests
 
       const optionType = quoteRequest.identifierOrCriteria
         ? fromH256(quoteRequest.identifierOrCriteria)
@@ -137,90 +127,47 @@ async function respondToRfqs() {
       const writeEvent = writeTxReceipt.events.find((event: any) => event.event === 'OptionsWritten');
       const [optionId, claimId] = [writeEvent.args.optionId, writeEvent.args.claimId];
 
+      // Construct Seaport Offer
       // Option we are offering
-      const offerItem = new OfferItem({
+      const rawOfferItem = {
         itemType: ItemType.ERC1155,
-        token: toH160(VALOREM_CLEAR_ADDRESS),
-        identifierOrCriteria: toH256(optionId),
-        startAmount: quoteRequest.amount,
-        endAmount: quoteRequest.amount,
-      });
-      const USDC_price = ethers.utils.parseUnits('100', 6);  // 100 USDC
+        token: VALOREM_CLEAR_ADDRESS,
+        identifierOrCriteria: optionId,
+        startAmount: fromH256(quoteRequest.amount),
+        endAmount: fromH256(quoteRequest.amount),         
+      };
       // Price we want for the option
-      const considerationItem = new ConsiderationItem({
+      const USDCprice = ethers.utils.parseUnits('100', 6);  // 100 USDC
+      const rawConsiderationItem = {
         itemType: ItemType.ERC20,
-        token: toH160(USDC_ADDRESS),  // USDC on Arb Goerli
-        // identifierOrCriteria: undefined,  // optional so remove?
-        startAmount: toH256(USDC_price),
-        endAmount: toH256(USDC_price),  
-        recipient: quoteRequest.takerAddress,
-      });    
+        token: USDC_ADDRESS,
+        startAmount: USDCprice.toString(),
+        endAmount: USDCprice.toString(),
+        recipient: signer.address,
+        identifierOrCriteria: ethers.BigNumber.from(0),
+      };
 
       const now = (await provider.getBlock(await provider.getBlockNumber())).timestamp;
       const in_30_mins = now + 30 * 60;
+      const counter = await seaportContract.getCounter(signer.address);
       const salt = `0x${Buffer.from(ethers.utils.randomBytes(8)).toString("hex").padStart(64, "0")}`
-
-      const orderParameters = new Order({
-        offerer: toH160(signer.address),
-        zone: toH160(ethers.constants.AddressZero),
-        offers: [offerItem],
-        considerations: [considerationItem],
-        orderType: OrderType.FULL_OPEN,  // this can change based on MM strategy
-        startTime: toH256(now),
-        endTime: toH256(in_30_mins),
-        zoneHash: toH256(ethers.constants.HashZero),
-        salt: toH256(salt),
-        conduitKey: toH256(ethers.constants.HashZero),
-      });
-
-      // create order signature
-      let counter = await seaportContract.getCounter(signer.address);
-
-      const offer = [
-        {
-          itemType: ItemType.ERC1155,
-          token: VALOREM_CLEAR_ADDRESS,
-          identifierOrCriteria: optionId,
-          startAmount: fromH256(quoteRequest.amount),
-          endAmount: fromH256(quoteRequest.amount),         
-        }
-      ];
-
-      const considerationData = [
-        {
-          itemType: ItemType.ERC20,
-          token: ethers.constants.AddressZero,
-          startAmount: USDC_price.toString(),
-          endAmount: USDC_price.toString(),
-          recipient: signer.address,
-          identifierOrCriteria: ethers.BigNumber.from(0),
-        }
-      ];
-
+      // order parameters, see https://docs.opensea.io/reference/seaport-structs#ordercomponents
       const orderComponents = {
         offerer: signer.address,
         zone: ethers.constants.AddressZero,
-        offer,
-        consideration: considerationData,
+        offer: [ rawOfferItem ],
+        consideration: [ rawConsiderationItem ],
         orderType: OrderType.FULL_OPEN,
-        totalOriginalConsiderationItems: considerationData.length,
-        salt,
         startTime: now,
         endTime: in_30_mins,
         zoneHash: ethers.constants.HashZero,
+        salt: salt,
         conduitKey: ethers.constants.HashZero,
         counter: counter,
       };
-  
-      const { chainId } = await provider.getNetwork();
-      const domainData = {
-        name: "Seaport",
-        version: "1.1",
-        chainId: chainId,
-        verifyingContract: SEAPORT_ADDRESS,
-      };
 
-      const EIP_1155_ORDER_TYPE = {
+      // create order signature
+      const ORDER_TYPES = {
         OrderComponents: [
           { name: "offerer", type: "address" },
           { name: "zone", type: "address" },
@@ -250,44 +197,74 @@ async function respondToRfqs() {
           { name: "recipient", type: "address" },
         ],
       };
-
+      // see https://docs.ethers.org/v5/api/signer/#Signer-signTypedData
       const signature = await signer._signTypedData(
-        domainData,
-        EIP_1155_ORDER_TYPE,
+        {},  // domain data is optional
+        ORDER_TYPES,
         orderComponents
       );
-  
       // Use EIP-2098 compact signatures to save gas.
       const splitSignature = ethers.utils.splitSignature(signature);
-
       const ethSignature = new EthSignature({
         r: ethers.utils.arrayify(splitSignature.r),
         s: ethers.utils.arrayify(splitSignature.s),
         v: ethers.utils.arrayify(splitSignature.v),
       });
 
-      const signerOrder = new SignedOrder({
-        parameters: orderParameters,
+      // convert order fields to H types
+      const offerItem = new OfferItem({
+        itemType: rawOfferItem.itemType,
+        token: toH160(rawOfferItem.token),
+        identifierOrCriteria: toH256(rawOfferItem.identifierOrCriteria),
+        startAmount: toH256(rawOfferItem.startAmount),
+        endAmount: toH256(rawOfferItem.endAmount),
+      });
+
+      const considerationItem = new ConsiderationItem({
+        itemType: rawConsiderationItem.itemType,
+        token: toH160(rawConsiderationItem.token),
+        identifierOrCriteria: toH256(rawConsiderationItem.identifierOrCriteria),
+        startAmount: toH256(rawConsiderationItem.startAmount),
+        endAmount: toH256(rawConsiderationItem.endAmount),
+        recipient: toH160(rawConsiderationItem.recipient),
+      });
+
+      const order = new Order({
+        offerer: toH160(orderComponents.offerer),
+        zone: toH160(orderComponents.zone),
+        offers: [offerItem],
+        considerations: [considerationItem],
+        orderType: orderComponents.orderType,
+        startTime: toH256(orderComponents.startTime),
+        endTime: toH256(orderComponents.endTime),
+        zoneHash: toH256(orderComponents.zoneHash),
+        salt: toH256(orderComponents.salt),
+        conduitKey: toH256(orderComponents.conduitKey),
+      });
+
+      const signedOrder = new SignedOrder({
+        parameters: order,
         signature: ethSignature,
       });
 
+      // construct quote response
       const quoteResponse = new QuoteResponse({
         ulid: quoteRequest.ulid,
         makerAddress: toH160(signer.address),
-        order: signerOrder,
+        order: signedOrder,
       });
 
+      // send response over RFQ service
       var quoteResponseStream = async function* () {
         yield quoteResponse;
       };
-
       rfqClient.maker(
         quoteResponseStream(), 
         {headers: [['cookie', cookie]]}
       );
       
     };
-  }
+  };
 };
 
 
