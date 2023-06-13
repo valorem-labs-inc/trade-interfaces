@@ -16,12 +16,11 @@
     "noUncheckedIndexedAccess": true,
     "baseUrl": ".",
     "paths": {
-      "@/gen/*": ["./gen/*"],
     },
     "types": ["node"],
   },
   "include": [
-    "docs/examples/typescript/**/*.ts",
+    "src",
   ],
   "exclude": ["node_modules", "gen"]
 }

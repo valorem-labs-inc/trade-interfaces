@@ -3,7 +3,7 @@ import { createPromiseClient } from '@bufbuild/connect';
 import { createGrpcTransport } from '@bufbuild/connect-node';
 import { SiweMessage } from 'siwe';
 import * as ethers from 'ethers';  // v5.5.0
-import { Auth } from '@/gen/trade/auth_connect';  // generated from auth.proto
+import { Auth } from '../gen/valorem/trade/v1/auth_connect';  // generated from auth.proto
 
 // replace with account to use for signing
 const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
@@ -67,7 +67,7 @@ async function authenticateWithTrade() {
 
 
 // 2. Create an option on Valorem Clearinghouse
-import IValoremOptionsClearinghouse from '../abi/IValoremOptionsClearinghouse.json';
+import IValoremOptionsClearinghouse from '../../abi/IValoremOptionsClearinghouse.json';
 import { OptionType, getOptionId } from './lib/getOptionId';
 
 const VALOREM_CLEAR_ADDRESS = '0x7513F78472606625A9B505912e3C80762f6C9Efb';  // Valorem Clearinghouse on Arb Goerli
@@ -124,13 +124,13 @@ async function createOption() {
 
 
 // 3. Send RFQ requests
-import { RFQ } from '../../../gen/trade/rfq_connect';  // generated from rfq.proto
-import { Action, QuoteRequest } from '../../../gen/trade/rfq_pb';  // generated from rfq.proto
-import { ItemType } from '../../../gen/trade/seaport_pb';  // generated from seaport.proto
+import { RFQ } from '../gen/valorem/trade/v1/rfq_connect';  // generated from rfq.proto
+import { Action, QuoteRequest } from '../gen/valorem/trade/v1/rfq_pb';  // generated from rfq.proto
+import { ItemType } from '../gen/valorem/trade/v1/seaport_pb';  // generated from seaport.proto
 import { toH160, toH256 } from './lib/fromBNToH';
 import { fromH160, fromH256 } from './lib/fromHToBN';
-import ISeaport from '../abi/ISeaport.json';
-import IERC20 from '../abi/IERC20.json';
+import ISeaport from '../../abi/ISeaport.json';
+import IERC20 from '../../abi/IERC20.json';
 
 const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581';  // seaport 1.1
 
