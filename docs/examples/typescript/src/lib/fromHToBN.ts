@@ -1,6 +1,6 @@
 import { BigNumber } from 'ethers';
 
-import type { H40, H96, H128, H160, H256 } from '../../../../gen/trade/types_pb';
+import type { H40, H96, H128, H160, H256 } from '../../gen/valorem/trade/v1/types_pb';
 
 export const fromH40 = (value: H40): BigNumber => {
   const lo = BigNumber.from(value.lo);
