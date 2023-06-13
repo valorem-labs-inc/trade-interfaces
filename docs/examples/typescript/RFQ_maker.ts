@@ -253,6 +253,9 @@ async function respondToRfqs() {
         order: signedOrder,
       });
 
+      console.log('Sending QuoteResponse:');
+      console.log(quoteResponse);
+
       // send response over RFQ service
       var quoteResponseStream = async function* () {
         yield quoteResponse;
