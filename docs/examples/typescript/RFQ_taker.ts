@@ -1,26 +1,19 @@
-import * as dotenv from 'dotenv';
-dotenv.config();
-const gRPC_ENDPOINT = 'https://localhost:8000';
-const DOMAIN = 'localhost.com';
-const NODE_ENDPOINT = 'http://localhost:8545';
-const PRIVATE_KEY = process.env.PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
-
 // 1. Authenticate with Valorem Trade
 import { createPromiseClient } from '@bufbuild/connect';
 import { createGrpcTransport } from '@bufbuild/connect-node';
 import { SiweMessage } from 'siwe';
 import * as ethers from 'ethers';  // v5.5.0
-import { Auth } from '../../../gen/trade/auth_connect';  // generated from auth.proto
+import { Auth } from '@/gen/trade/auth_connect';  // generated from auth.proto
 
 // replace with account to use for signing
-// const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
-// const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
+const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
 
 const provider = new ethers.providers.JsonRpcProvider(NODE_ENDPOINT);
 const signer = new ethers.Wallet(PRIVATE_KEY, provider);
 
-// const gRPC_ENDPOINT = 'https://exchange.valorem.xyz';
-// const DOMAIN = 'exchange.valorem.xyz';
+const gRPC_ENDPOINT = 'https://exchange.valorem.xyz';
+const DOMAIN = 'exchange.valorem.xyz';
 
 var cookie: string;  // to be used for all server interactions
 // custom Connect interceptor for retrieving cookie
@@ -78,8 +71,11 @@ import IValoremOptionsClearinghouse from '../abi/IValoremOptionsClearinghouse.js
 import { OptionType, getOptionId } from './lib/getOptionId';
 
 const VALOREM_CLEAR_ADDRESS = '0x7513F78472606625A9B505912e3C80762f6C9Efb';  // Valorem Clearinghouse on Arb Goerli
-const underlyingAsset = '0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372';  // Wrapped ETH on Arb Goerli
-const exerciseAsset = '0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458';  // USDC on Arb Goerli
+const WETH_ADDRESS = '0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372';  // our mock Wrapped ETH on Arb Goerli
+const USDC_ADDRESS = '0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458';  // our mock USDC on Arb Goerli
+
+const underlyingAsset = WETH_ADDRESS; 
+const exerciseAsset = USDC_ADDRESS; 
 
 async function createOption() {
   const clearinghouseContract = new ethers.Contract(VALOREM_CLEAR_ADDRESS, IValoremOptionsClearinghouse, provider);
@@ -131,14 +127,16 @@ import { RFQ } from '../../../gen/trade/rfq_connect';  // generated from rfq.pro
 import { Action, QuoteRequest } from '../../../gen/trade/rfq_pb';  // generated from rfq.proto
 import { ItemType } from '../../../gen/trade/seaport_pb';  // generated from seaport.proto
 import { toH160, toH256 } from './lib/fromBNToH';
+import { fromH160, fromH256 } from './lib/fromHToBN';
 import ISeaport from '../abi/ISeaport.json';
-import { Order, SignedOrder, ConsiderationItem, OfferItem, OrderType  } from '../../../gen/trade/seaport_pb';
-const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581';
+import IERC20 from '../abi/IERC20.json';
 
+const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581';  // seaport 1.1
 
 async function sendRfqRequests(optionId: ethers.BigNumber) {
   
-  const seaportContract = new ethers.Contract(SEAPORT_ADDRESS, ISeaport, signer);
+  const seaportContract = new ethers.Contract(SEAPORT_ADDRESS, ISeaport, provider);
+  const usdcContract = new ethers.Contract(USDC_ADDRESS, IERC20, provider);
 
   const rfqClient = createPromiseClient(RFQ, transport);
 
@@ -154,32 +152,72 @@ async function sendRfqRequests(optionId: ethers.BigNumber) {
   });
 
   // continuously send requests and handle responses
-  console.log('Sending RFQ requests...');
-  while (true) {
-    // create your own quote request and response stream handling logic here
-    const quoteRequestStream = async function* () {
-      yield quoteRequest;
-    };
+  console.log('Sending RFQ requests for option ID', optionId, '...');
 
-    const quoteResponseStream = rfqClient.taker(
-      quoteRequestStream(), 
-      {headers: [['cookie', cookie]]}
-    );
-
-    for await (const quoteResponse of quoteResponseStream) {
-      console.log('Received QuoteResponse:'); 
-      console.log(quoteResponse);
-      // Handle the response here
-
-      // seaportContract.connect(signer).fullfillOrder(signedOrder, ethers.constants.HashZero);
-
-    }
-
-    // sends request out every 2 seconds
-    // await new Promise((resolve) => setTimeout(resolve, 2000));
-    
+  // create your own quote request and response stream handling logic here
+  const quoteRequestStream = async function* () {
+    yield quoteRequest;
   };
 
+  while (true) {
+    for await (const quoteResponse of rfqClient.taker(quoteRequestStream(), {headers: [['cookie', cookie]]})) {
+
+      console.log('Received a Quote Response...');
+
+      // convert order fields from H types back to BigNumbers
+      const signedOrder_H = quoteResponse.order;
+      const order_H = signedOrder_H.parameters;
+      const [ offerItem_H ] = order_H.offers;
+      const [ considerationItem_H ] = order_H.considerations;
+      
+      const offerItem = {
+        itemType: offerItem_H.itemType,
+        token: ethers.utils.hexValue(fromH160(offerItem_H.token)),
+        identifierOrCriteria: fromH256(offerItem_H.identifierOrCriteria),
+        startAmount: fromH256(offerItem_H.startAmount),
+        endAmount: fromH256(offerItem_H.endAmount),
+      };
+
+      const considerationItem = {
+        itemType: considerationItem_H.itemType,
+        token: ethers.utils.hexValue(fromH160(considerationItem_H.token)),
+        identifierOrCriteria: fromH256(considerationItem_H.identifierOrCriteria),
+        startAmount: fromH256(considerationItem_H.startAmount),
+        endAmount: fromH256(considerationItem_H.endAmount),
+        recipient: ethers.utils.hexValue(fromH160(considerationItem_H.recipient)),
+      };
+
+      if (considerationItem.token !== USDC_ADDRESS) { continue };  // only accept USDC
+
+      const order = {
+        offerer: ethers.utils.hexValue(fromH160(order_H.offerer)),
+        zone: ethers.utils.hexValue(fromH160(order_H.zone)),
+        offer: [ offerItem ],
+        consideration: [ considerationItem ],
+        orderType: order_H.orderType,
+        startTime: fromH256(order_H.startTime),
+        endTime: fromH256(order_H.endTime),
+        zoneHash: fromH256(order_H.zoneHash),
+        salt: fromH256(order_H.salt),
+        conduitKey: fromH256(order_H.conduitKey),
+      };
+
+      const signedOrder = {
+        parameters: order,
+        signature: signedOrder_H.signature,
+      };
+
+      // assumes start and end amount are equal
+      if (considerationItem.startAmount.gt(ethers.utils.parseUnits('200', 6))) { continue };  // only accept price less than 200 USDC 
+
+      console.log('Accepting quote to buy option for', ethers.utils.formatUnits(considerationItem.startAmount, 6) , 'USDC and executing order on seaport.');
+
+      usdcContract.connect(signer).approve(SEAPORT_ADDRESS, considerationItem.startAmount);
+
+      seaportContract.connect(signer).fullfillOrder(signedOrder, signedOrder.parameters.conduitKey);
+
+    };
+  };
 };
 
 

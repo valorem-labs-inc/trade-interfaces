@@ -79,7 +79,7 @@ import { EthSignature } from '../../../gen/trade/types_pb';
 
 const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581';  // seaport 1.1
 const VALOREM_CLEAR_ADDRESS = '0x7513F78472606625A9B505912e3C80762f6C9Efb';  // Valorem Clearinghouse on Arb Goerli
-const USDC_ADDRESS = '0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458';  // USDC on Arb Goerli
+const USDC_ADDRESS = '0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458';  // our mock USDC on Arb Goerli
 
 async function respondToRfqs() {
   const seaportContract = new ethers.Contract(SEAPORT_ADDRESS, ISeaport, signer);
@@ -121,6 +121,7 @@ async function respondToRfqs() {
       const approveTxReceipt = await (await underlyingERC20.connect(signer).approve(VALOREM_CLEAR_ADDRESS, optionInfo.underlyingAmount.mul(optionAmount))).wait();
       if (approveTxReceipt.status == 0) { throw new Error('Underlying ERC20 approval failed.') };
 
+      // write option with clearing house
       const writeTxReceipt = await (await clearinghouseContract.connect(signer).write(optionType, optionAmount)).wait();
       if (writeTxReceipt.status == 0) { throw new Error('Writing option with clearing house failed.') };
       const writeEvent = writeTxReceipt.events.find((event: any) => event.event === 'OptionsWritten');
@@ -128,7 +129,7 @@ async function respondToRfqs() {
 
       // Construct Seaport Offer
       // Option we are offering
-      const rawOfferItem = {
+      const offerItem = {
         itemType: ItemType.ERC1155,
         token: VALOREM_CLEAR_ADDRESS,
         identifierOrCriteria: optionId,
@@ -137,7 +138,7 @@ async function respondToRfqs() {
       };
       // Price we want for the option
       const USDCprice = ethers.utils.parseUnits('100', 6);  // 100 USDC
-      const rawConsiderationItem = {
+      const considerationItem = {
         itemType: ItemType.ERC20,
         token: USDC_ADDRESS,
         startAmount: USDCprice.toString(),
@@ -150,12 +151,12 @@ async function respondToRfqs() {
       const in_30_mins = now + 30 * 60;
       const counter = await seaportContract.getCounter(signer.address);
       const salt = `0x${Buffer.from(ethers.utils.randomBytes(8)).toString("hex").padStart(64, "0")}`
-      // order parameters, see https://docs.opensea.io/reference/seaport-structs#ordercomponents
+      // order parameters, see https://arbiscan.io/address/0x00000000006c3852cbEf3e08E8dF289169EdE581#code#F4#L1
       const orderComponents = {
         offerer: signer.address,
         zone: ethers.constants.AddressZero,
-        offer: [ rawOfferItem ],
-        consideration: [ rawConsiderationItem ],
+        offer: [ offerItem ],
+        consideration: [ considerationItem ],
         orderType: OrderType.FULL_OPEN,
         startTime: now,
         endTime: in_30_mins,
@@ -211,28 +212,28 @@ async function respondToRfqs() {
       });
 
       // convert order fields to H types
-      const offerItem = new OfferItem({
-        itemType: rawOfferItem.itemType,
-        token: toH160(rawOfferItem.token),
-        identifierOrCriteria: toH256(rawOfferItem.identifierOrCriteria),
-        startAmount: toH256(rawOfferItem.startAmount),
-        endAmount: toH256(rawOfferItem.endAmount),
+      const offerItem_H = new OfferItem({
+        itemType: offerItem.itemType,
+        token: toH160(offerItem.token),
+        identifierOrCriteria: toH256(offerItem.identifierOrCriteria),
+        startAmount: toH256(offerItem.startAmount),
+        endAmount: toH256(offerItem.endAmount),
       });
 
-      const considerationItem = new ConsiderationItem({
-        itemType: rawConsiderationItem.itemType,
-        token: toH160(rawConsiderationItem.token),
-        identifierOrCriteria: toH256(rawConsiderationItem.identifierOrCriteria),
-        startAmount: toH256(rawConsiderationItem.startAmount),
-        endAmount: toH256(rawConsiderationItem.endAmount),
-        recipient: toH160(rawConsiderationItem.recipient),
+      const considerationItem_H = new ConsiderationItem({
+        itemType: considerationItem.itemType,
+        token: toH160(considerationItem.token),
+        identifierOrCriteria: toH256(considerationItem.identifierOrCriteria),
+        startAmount: toH256(considerationItem.startAmount),
+        endAmount: toH256(considerationItem.endAmount),
+        recipient: toH160(considerationItem.recipient),
       });
 
-      const order = new Order({
+      const order_H = new Order({
         offerer: toH160(orderComponents.offerer),
         zone: toH160(orderComponents.zone),
-        offers: [offerItem],
-        considerations: [considerationItem],
+        offers: [offerItem_H],
+        considerations: [considerationItem_H],
         orderType: orderComponents.orderType,
         startTime: toH256(orderComponents.startTime),
         endTime: toH256(orderComponents.endTime),
@@ -241,8 +242,8 @@ async function respondToRfqs() {
         conduitKey: toH256(orderComponents.conduitKey),
       });
 
-      const signedOrder = new SignedOrder({
-        parameters: order,
+      const signedOrder_H = new SignedOrder({
+        parameters: order_H,
         signature: ethSignature,
       });
 
@@ -250,7 +251,7 @@ async function respondToRfqs() {
       const quoteResponse = new QuoteResponse({
         ulid: quoteRequest.ulid,
         makerAddress: toH160(signer.address),
-        order: signedOrder,
+        order: signedOrder_H,
       });
 
       console.log('Sending QuoteResponse:');
