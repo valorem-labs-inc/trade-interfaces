@@ -65,6 +65,7 @@ async function authenticateWithTrade() {
   console.log('Client has authenticated with Valorem Trade!');
 }
 
+
 // 2. Listen for RFQs and respond with offers
 import { RFQ } from '../../../gen/trade/rfq_connect';  // generated from rfq.proto
 import { Action, QuoteResponse } from '../../../gen/trade/rfq_pb';  // generated from rfq.proto
@@ -76,11 +77,9 @@ import { Order, SignedOrder, ConsiderationItem, OfferItem, OrderType, ItemType }
 import ISeaport from '../abi/ISeaport.json';
 import { EthSignature } from '../../../gen/trade/types_pb';
 
-
 const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581';  // seaport 1.1
 const VALOREM_CLEAR_ADDRESS = '0x7513F78472606625A9B505912e3C80762f6C9Efb';  // Valorem Clearinghouse on Arb Goerli
 const USDC_ADDRESS = '0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458';  // USDC on Arb Goerli
-
 
 async function respondToRfqs() {
   const seaportContract = new ethers.Contract(SEAPORT_ADDRESS, ISeaport, signer);
