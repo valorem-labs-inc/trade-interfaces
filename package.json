@@ -1,7 +1,7 @@
 {
-  "name": "exchange-proto",
+  "name": "trade-interfaces",
   "version": "1.0.0",
-  "repository": "https://github.com/valorem-labs-inc/exchange-proto.git",
+  "repository": "https://github.com/valorem-labs-inc/trade-interfaces.git",
   "license": "MIT",
   "dependencies": {
     "@bufbuild/buf": "^1.20.0-1",
@@ -15,7 +15,13 @@
     "ethers": "5.7",
     "siwe": "^2.1.4",
     "tsx": "^3.12.7",
-    "typescript": "^5.0.4",
-    "viem": "^1.0.0"
-  }
+    "typescript": "^5.0.4"
+  },
+  "devDependencies": {
+    "tsconfig-paths": "^4.2.0"
+  },
+	"scripts": {
+		"maker": "ts-node -r tsconfig-paths/register docs/examples/typescript/RFQ_maker.ts",
+		"taker": "ts-node -r tsconfig-paths/register docs/examples/typescript/RFQ_taker.ts"
+	}
 }
