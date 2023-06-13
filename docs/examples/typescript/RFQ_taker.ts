@@ -103,7 +103,8 @@ async function createOption() {
   const typeOfToken = await clearinghouseContract.tokenType(optionId);
   // if it does not exist, create it
   if (typeOfToken == 0) { 
-    console.log('Creating option type with clearing house.');
+    console.log('Creating option with clearing house. Option type:');
+    console.log(option);
     const newOptionTxReceipt = await (await clearinghouseContract.connect(signer).newOptionType(
       underlyingAsset,
       underlyingAmount,
@@ -117,7 +118,6 @@ async function createOption() {
     console.log('Nice! Option type already exists with clearing house.');
   };
 
-  console.log('Sending RFQs for option with ID:', optionId.toString());
   return optionId;
 }
 
@@ -152,7 +152,7 @@ async function sendRfqRequests(optionId: ethers.BigNumber) {
   });
 
   // continuously send requests and handle responses
-  console.log('Sending RFQ requests for option ID', optionId, '...');
+  console.log('Sending RFQs for option ID', optionId.toString());
 
   // create your own quote request and response stream handling logic here
   const quoteRequestStream = async function* () {
@@ -161,6 +161,7 @@ async function sendRfqRequests(optionId: ethers.BigNumber) {
 
   while (true) {
     for await (const quoteResponse of rfqClient.taker(quoteRequestStream(), {headers: [['cookie', cookie]]})) {
+      if (Object.keys(quoteResponse).length === 0) { continue };  // empty response
 
       console.log('Received a Quote Response...');
 
