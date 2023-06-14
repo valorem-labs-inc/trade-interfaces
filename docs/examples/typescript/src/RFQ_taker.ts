@@ -64,7 +64,7 @@ async function authenticateWithTrade() {
   await authClient.authenticate({}, {headers: [['cookie', cookie]]});
 
   console.log('Client has authenticated with Valorem Trade!');
-}
+};
 
 
 // 2. Initialize an option with Valorem Clearinghouse
@@ -123,15 +123,22 @@ async function createOption() {
   };
 
   return optionId;
-}
+};
 
 
-// 3. Send RFQ requests to Valorem Trade
-import { BigNumber } from 'ethers';  // v5.5.0
+// 3. Send RFQ requests, then and execute the returned signed offers on Seaport
+import { BigNumber, constants } from 'ethers';  // v5.5.0
+const { formatUnits } = utils;
 import { RFQ } from '../gen/valorem/trade/v1/rfq_connect';  // generated from rfq.proto
 import { Action, QuoteRequest } from '../gen/valorem/trade/v1/rfq_pb';  // generated from rfq.proto
 import { ItemType } from '../gen/valorem/trade/v1/seaport_pb';  // generated from seaport.proto
 import { toH160, toH256 } from './lib/fromBNToH';  // library script for H number conversions
+import ISeaport from '../../abi/ISeaport.json';
+import IERC20 from '../../abi/IERC20.json';
+
+const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581';  // seaport 1.1
+const seaportContract = new Contract(SEAPORT_ADDRESS, ISeaport, provider);
+const usdcContract = new Contract(USDC_ADDRESS, IERC20, provider);
 
 async function sendRfqRequests(optionId: BigNumber) {
   const rfqClient = createPromiseClient(RFQ, transport);
@@ -161,25 +168,34 @@ async function sendRfqRequests(optionId: BigNumber) {
       if (Object.keys(quoteResponse).length === 0) { continue };  // empty response
       console.log('Received a Quote Response...');
 
-      await handleQuoteResponse(quoteResponse);
+      // format the response into an order to be executed on seaport
+      const signedOrder = await formatQuoteResponse(quoteResponse);
+
+      console.log('Accepting quote to buy', signedOrder.parameters.offer[0].startAmount, 'options for', formatUnits(signedOrder.parameters.consideration[0].startAmount, 6) , 'USDC; Executing order on Seaport.');
+
+      // first approve Seaport spend of usdc price
+      let txReceipt = await (await usdcContract.connect(signer).approve(SEAPORT_ADDRESS, signedOrder.parameters.consideration[0].startAmount)).wait();  // assumes start and end are the same
+      if (txReceipt.status == 0) {
+        console.log('Skipping executing order; USDC approval failed.');
+        return;
+      };
+      
+      txReceipt = await (await seaportContract.connect(signer).fulfillOrder(signedOrder, constants.HashZero)).wait();
+      if (txReceipt.status == 0) {
+        console.log('Skipping executing order; order fulfillment failed.');
+        return;
+      };
     };
   };
 };
 
 
-// 4. Respond to Quotes from makers
-import { constants } from 'ethers';  // v5.5.0
-const { hexValue, formatUnits, joinSignature, hexlify } = utils;
+// Format quotes from makers
+const { hexValue, joinSignature, hexlify } = utils;
 import { QuoteResponse } from '../gen/valorem/trade/v1/rfq_pb';  // generated from rfq.proto
 import { fromH160, fromH256 } from './lib/fromHToBN';  // library script for H number conversions
-import ISeaport from '../../abi/ISeaport.json';
-import IERC20 from '../../abi/IERC20.json';
 
-const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581';  // seaport 1.1
-const seaportContract = new Contract(SEAPORT_ADDRESS, ISeaport, provider);
-const usdcContract = new Contract(USDC_ADDRESS, IERC20, provider);
-
-async function handleQuoteResponse(quoteResponse: QuoteResponse) {
+async function formatQuoteResponse(quoteResponse: QuoteResponse) {
   // convert order fields from H types back to BigNumbers
   const signedOrder_H = quoteResponse.order;
   const order_H = signedOrder_H.parameters;
@@ -236,20 +252,7 @@ async function handleQuoteResponse(quoteResponse: QuoteResponse) {
     return;
   };
 
-  console.log('Accepting quote to buy option for', formatUnits(considerationItem.startAmount, 6) , 'USDC; Executing order on seaport.');
-
-  // approve seaport spend of usdc price
-  let txReceipt = await (await usdcContract.connect(signer).approve(SEAPORT_ADDRESS, considerationItem.startAmount)).wait();  // assumes start and end are the same
-  if (txReceipt.status == 0) {
-    console.log('Skipping executing order; USDC approval failed.');
-    return;
-  };
-
-  txReceipt = await (await seaportContract.connect(signer).fulfillOrder(signedOrder, constants.HashZero)).wait();
-  if (txReceipt.status == 0) {
-    console.log('Skipping executing order; order fulfillment failed.');
-    return;
-  };
+  return signedOrder;
 };
 
 
@@ -259,7 +262,7 @@ async function main(){
   const optionId = await createOption();
   await sendRfqRequests(optionId);
 
-}
+};
 
 
 main();
