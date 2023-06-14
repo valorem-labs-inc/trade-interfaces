@@ -2,15 +2,16 @@
 import { createPromiseClient } from '@bufbuild/connect';
 import { createGrpcTransport } from '@bufbuild/connect-node';
 import { SiweMessage } from 'siwe';
-import * as ethers from 'ethers';  // v5.5.0
+import { Wallet, providers } from 'ethers';  // v5.5.0
+const { JsonRpcProvider } = providers;
 import { Auth } from '../gen/valorem/trade/v1/auth_connect';  // generated from auth.proto
 
 // replace with account to use for signing
 const PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
 
-const provider = new ethers.providers.JsonRpcProvider(NODE_ENDPOINT);
-const signer = new ethers.Wallet(PRIVATE_KEY, provider);
+const provider = new JsonRpcProvider(NODE_ENDPOINT);
+const signer = new Wallet(PRIVATE_KEY, provider);
 
 const gRPC_ENDPOINT = 'https://exchange.valorem.xyz';
 const DOMAIN = 'exchange.valorem.xyz';
@@ -66,28 +67,42 @@ async function authenticateWithTrade() {
 }
 
 
-// 2. Listen for RFQs and respond with offers
+// 2. Listen for RFQs and respond with offers on Valorem Trade
+import { Contract, BigNumber, utils, constants } from 'ethers';  // v5.5.0
+const { parseUnits, randomBytes, splitSignature, arrayify } = utils;
 import { RFQ } from '../gen/valorem/trade/v1/rfq_connect';  // generated from rfq.proto
 import { Action, QuoteResponse } from '../gen/valorem/trade/v1/rfq_pb';  // generated from rfq.proto
-import { fromH256 } from './lib/fromHToBN';
+import { EthSignature } from '../gen/valorem/trade/v1/types_pb';  // generated from types.proto
+import { 
+  Order, 
+  SignedOrder, 
+  ConsiderationItem, 
+  OfferItem, 
+  OrderType, 
+  ItemType 
+} from '../gen/valorem/trade/v1/seaport_pb';  // generated from seaport.proto
+import { fromH256 } from './lib/fromHToBN';  // custom library script for H number conversions
+import { toH160, toH256 } from './lib/fromBNToH';  // custom library script for H number conversions
 import IValoremOptionsClearinghouse from '../../abi/IValoremOptionsClearinghouse.json';
-import IERC20abi from '../../abi/IERC20.json';
-import { toH160, toH256 } from './lib/fromBNToH';
-import { Order, SignedOrder, ConsiderationItem, OfferItem, OrderType, ItemType } from '../gen/valorem/trade/v1//seaport_pb';
 import ISeaport from '../../abi/ISeaport.json';
-import { EthSignature } from '../gen/valorem/trade/v1/types_pb';
+import IERC20 from '../../abi/IERC20.json';
 
-const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581';  // seaport 1.1
 const VALOREM_CLEAR_ADDRESS = '0x7513F78472606625A9B505912e3C80762f6C9Efb';  // Valorem Clearinghouse on Arb Goerli
+const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581';  // seaport 1.1
 const USDC_ADDRESS = '0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458';  // our mock USDC on Arb Goerli
+const WETH_ADDRESS = '0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372';  // our mock Wrapped ETH on Arb Goerli
+
+const clearinghouseContract = new Contract(VALOREM_CLEAR_ADDRESS, IValoremOptionsClearinghouse, provider);
+const seaportContract = new Contract(SEAPORT_ADDRESS, ISeaport, signer);
+const wethContract = new Contract(WETH_ADDRESS, IERC20, provider);
+
 
 async function respondToRfqs() {
-  const seaportContract = new ethers.Contract(SEAPORT_ADDRESS, ISeaport, signer);
-
   const rfqClient = createPromiseClient(RFQ, transport);
 
-  // create your own quote request and response stream handling logic here
+  // create your own quote request and response stream handling logic here!
 
+  // empty response used to open the stream
   const emptyQuoteResponse = new QuoteResponse();
   var emptyQuoteResponseStream = async function* () {
     yield emptyQuoteResponse;
@@ -97,52 +112,50 @@ async function respondToRfqs() {
 
   while (true) {
     for await (const quoteRequest of rfqClient.maker(emptyQuoteResponseStream(), {headers: [['cookie', cookie]]})) {
-
       console.log('Received a Quote Request.');
-
-      if (quoteRequest.action !== Action.BUY) { 
-        console.log('Skipping Quote Request because it is not a buy request.');
-        continue;
-      };  // only responding to buy requests
 
       if (!quoteRequest.identifierOrCriteria) {
         console.log('Skipping Quote Request because "identifierOrCriteria" is undefined.');
       };
-      const optionType = fromH256(quoteRequest.identifierOrCriteria);
+      const optionId = fromH256(quoteRequest.identifierOrCriteria);
+
+      if (quoteRequest.action !== Action.BUY) { 
+        console.log('Skipping Quote Request because only responding to buy requests.');
+        continue;
+      };
 
       if (!quoteRequest.amount) {
         console.log('Skipping Quote Request because "amount" is undefined.');
       };
       const optionAmount = fromH256(quoteRequest.amount);
 
-      console.log('Responding to Quote Request for', optionAmount.toString(), 'options with ID' + optionType.toString());
-
-      const clearinghouseContract = new ethers.Contract(VALOREM_CLEAR_ADDRESS, IValoremOptionsClearinghouse, provider);
-
       // get option info
-      const optionInfo = await clearinghouseContract.option(optionType);
+      const optionInfo = await clearinghouseContract.option(optionId);
+      if (optionInfo.underlyingAsset !== WETH_ADDRESS) {
+        console.log('Skipping Quote Request because only responding to WETH options.');
+        continue;
+      };
+      console.log('Responding to Quote Request to buy', optionAmount.toString(), 'WETH options with ID', optionId.toString());
       console.log('Option info:');
       console.log(optionInfo);
-      
+
       // approve clearing house transfer of underlying asset
-      const underlyingERC20 = new ethers.Contract(optionInfo.underlyingAsset, IERC20abi, provider);
-      const approveTxReceipt = await (await underlyingERC20.connect(signer).approve(VALOREM_CLEAR_ADDRESS, optionInfo.underlyingAmount.mul(optionAmount))).wait();
+      const totalUnderlyingAmount = optionInfo.underlyingAmount.mul(optionAmount).mul(10);    
+      const approveTxReceipt = await (await wethContract.connect(signer).approve(VALOREM_CLEAR_ADDRESS, totalUnderlyingAmount)).wait();
       if (approveTxReceipt.status == 0) { 
         console.log('Skipping responding to RFQ; Underlying ERC20 approval failed.');
         continue;
       };
 
       // write option with clearing house
-      const writeTxReceipt = await (await clearinghouseContract.connect(signer).write(optionType, optionAmount)).wait();
+      const writeTxReceipt = await (await clearinghouseContract.connect(signer).write(optionId, optionAmount)).wait();
       if (writeTxReceipt.status == 0) { 
         console.log('Skipping responding to RFQ; Writing option with clearing house failed.');
         continue;
       };
-      const writeEvent = writeTxReceipt.events.find((event: any) => event.event === 'OptionsWritten');
-      const [optionId, claimId] = [writeEvent.args.optionId, writeEvent.args.claimId];
 
       // Construct Seaport Offer:
-      // Option we are offering
+      // option we are offering
       const offerItem = {
         itemType: ItemType.ERC1155,
         token: VALOREM_CLEAR_ADDRESS,
@@ -150,34 +163,33 @@ async function respondToRfqs() {
         startAmount: fromH256(quoteRequest.amount),
         endAmount: fromH256(quoteRequest.amount),         
       };
-      // Price we want for the option
-      const USDCprice = ethers.utils.parseUnits('100', 6);  // 100 USDC
+      // price we want for the option
+      const USDCprice = parseUnits('100', 6);  // 100 USDC
       const considerationItem = {
         itemType: ItemType.ERC20,
         token: USDC_ADDRESS,
         startAmount: USDCprice.toString(),
         endAmount: USDCprice.toString(),
         recipient: signer.address,
-        identifierOrCriteria: ethers.BigNumber.from(0),
+        identifierOrCriteria: BigNumber.from(0),
       };
 
       const now = (await provider.getBlock(await provider.getBlockNumber())).timestamp;
-      const in_30_mins = now + 30 * 60;
-      const counter = await seaportContract.getCounter(signer.address);
-      const salt = `0x${Buffer.from(ethers.utils.randomBytes(8)).toString('hex').padStart(64, '0')}`
-      // order parameters, see https://arbiscan.io/address/0x00000000006c3852cbEf3e08E8dF289169EdE581#code#F4#L1
+      const in_2_mins = now + 2 * 60;  // offer expires in 2 minutes
+      const salt = `0x${Buffer.from(randomBytes(8)).toString('hex').padStart(64, '0')}`
+
+      // see https://arbiscan.io/address/0x00000000006c3852cbEf3e08E8dF289169EdE581#code#F4#L1
       const orderComponents = {
         offerer: signer.address,
-        zone: ethers.constants.AddressZero,
+        zone: constants.AddressZero,
         offer: [ offerItem ],
         consideration: [ considerationItem ],
         orderType: OrderType.FULL_OPEN,
         startTime: now,
-        endTime: in_30_mins,
-        zoneHash: ethers.constants.HashZero,
+        endTime: in_2_mins,
+        zoneHash: constants.HashZero,
         salt: salt,
-        conduitKey: ethers.constants.HashZero,
-        counter: counter,
+        conduitKey: constants.HashZero,
       };
 
       // create order signature
@@ -211,6 +223,7 @@ async function respondToRfqs() {
           { name: 'recipient', type: 'address' },
         ],
       };
+
       // see https://docs.ethers.org/v5/api/signer/#Signer-signTypedData
       const signature = await signer._signTypedData(
         {},  // domain data is optional
@@ -218,11 +231,11 @@ async function respondToRfqs() {
         orderComponents
       );
       // Use EIP-2098 compact signatures to save gas.
-      const splitSignature = ethers.utils.splitSignature(signature);
+      const splitSig = splitSignature(signature);
       const ethSignature = new EthSignature({
-        r: ethers.utils.arrayify(splitSignature.r),
-        s: ethers.utils.arrayify(splitSignature.s),
-        v: ethers.utils.arrayify(splitSignature.v),
+        r: arrayify(splitSig.r),
+        s: arrayify(splitSig.s),
+        v: arrayify(splitSig.v),
       });
 
       // convert order fields to H types
@@ -233,7 +246,6 @@ async function respondToRfqs() {
         startAmount: toH256(offerItem.startAmount),
         endAmount: toH256(offerItem.endAmount),
       });
-
       const considerationItem_H = new ConsiderationItem({
         itemType: considerationItem.itemType,
         token: toH160(considerationItem.token),
@@ -242,7 +254,6 @@ async function respondToRfqs() {
         endAmount: toH256(considerationItem.endAmount),
         recipient: toH160(considerationItem.recipient),
       });
-
       const order_H = new Order({
         offerer: toH160(orderComponents.offerer),
         zone: toH160(orderComponents.zone),
@@ -261,7 +272,7 @@ async function respondToRfqs() {
         signature: ethSignature,
       });
 
-      // construct quote response
+      // construct a quote response
       const quoteResponse = new QuoteResponse({
         ulid: quoteRequest.ulid,
         makerAddress: toH160(signer.address),
@@ -279,7 +290,8 @@ async function respondToRfqs() {
         quoteResponseStream(), 
         {headers: [['cookie', cookie]]}
       );
-      
+
+      // Fin!
     };
   };
 };
