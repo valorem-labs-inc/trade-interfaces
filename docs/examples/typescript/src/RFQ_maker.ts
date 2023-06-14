@@ -69,7 +69,7 @@ async function authenticateWithTrade() {
 
 // 2. Listen for RFQs and respond with offers on Valorem Trade
 import { Contract, BigNumber, utils, constants } from 'ethers';  // v5.5.0
-const { parseUnits, randomBytes, splitSignature, arrayify } = utils;
+const { parseUnits, randomBytes, splitSignature, arrayify, formatUnits } = utils;
 import { RFQ } from '../gen/valorem/trade/v1/rfq_connect';  // generated from rfq.proto
 import { Action, QuoteResponse } from '../gen/valorem/trade/v1/rfq_pb';  // generated from rfq.proto
 import { EthSignature } from '../gen/valorem/trade/v1/types_pb';  // generated from types.proto
@@ -81,11 +81,11 @@ import {
   OrderType, 
   ItemType 
 } from '../gen/valorem/trade/v1/seaport_pb';  // generated from seaport.proto
-import { fromH256 } from './lib/fromHToBN';  // custom library script for H number conversions
-import { toH160, toH256 } from './lib/fromBNToH';  // custom library script for H number conversions
+import { fromH256 } from './lib/fromHToBN';  // library script for H number conversions
+import { toH160, toH256 } from './lib/fromBNToH';  // library script for H number conversions
 import IValoremOptionsClearinghouse from '../../abi/IValoremOptionsClearinghouse.json';
-import ISeaport from '../../abi/ISeaport.json';
 import IERC20 from '../../abi/IERC20.json';
+import IERC1155abi from '../../abi/IERC1155.json';
 
 const VALOREM_CLEAR_ADDRESS = '0x7513F78472606625A9B505912e3C80762f6C9Efb';  // Valorem Clearinghouse on Arb Goerli
 const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581';  // seaport 1.1
@@ -93,14 +93,14 @@ const USDC_ADDRESS = '0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458';  // our mock 
 const WETH_ADDRESS = '0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372';  // our mock Wrapped ETH on Arb Goerli
 
 const clearinghouseContract = new Contract(VALOREM_CLEAR_ADDRESS, IValoremOptionsClearinghouse, provider);
-const seaportContract = new Contract(SEAPORT_ADDRESS, ISeaport, signer);
+const optionTokenContract = new Contract(VALOREM_CLEAR_ADDRESS, IERC1155abi, provider);
 const wethContract = new Contract(WETH_ADDRESS, IERC20, provider);
 
 
 async function respondToRfqs() {
   const rfqClient = createPromiseClient(RFQ, transport);
 
-  // create your own quote request and response stream handling logic here!
+  // Create your own quote request and response stream handling logic here!
 
   // empty response used to open the stream
   const emptyQuoteResponse = new QuoteResponse();
@@ -112,7 +112,7 @@ async function respondToRfqs() {
 
   while (true) {
     for await (const quoteRequest of rfqClient.maker(emptyQuoteResponseStream(), {headers: [['cookie', cookie]]})) {
-      console.log('Received a Quote Request.');
+      console.log('Received a Quote Request...');
 
       if (!quoteRequest.identifierOrCriteria) {
         console.log('Skipping Quote Request because "identifierOrCriteria" is undefined.');
@@ -141,23 +141,25 @@ async function respondToRfqs() {
 
       // approve clearing house transfer of underlying asset
       const totalUnderlyingAmount = optionInfo.underlyingAmount.mul(optionAmount).mul(10);    
-      const approveTxReceipt = await (await wethContract.connect(signer).approve(VALOREM_CLEAR_ADDRESS, totalUnderlyingAmount)).wait();
-      if (approveTxReceipt.status == 0) { 
+      let txReceipt = await (await wethContract.connect(signer).approve(VALOREM_CLEAR_ADDRESS, totalUnderlyingAmount)).wait();
+      if (txReceipt.status == 0) { 
         console.log('Skipping responding to RFQ; Underlying ERC20 approval failed.');
         continue;
       };
 
       // write option with clearing house
-      const writeTxReceipt = await (await clearinghouseContract.connect(signer).write(optionId, optionAmount)).wait();
-      if (writeTxReceipt.status == 0) { 
+      txReceipt = await (await clearinghouseContract.connect(signer).write(optionId, optionAmount)).wait();
+      if (txReceipt.status == 0) { 
         console.log('Skipping responding to RFQ; Writing option with clearing house failed.');
         continue;
       };
 
       // Construct Seaport Offer:
+      // Note we use Seaport v1.1; see https://github.com/ProjectOpenSea/seaport/blob/seaport-1.1/docs/SeaportDocumentation.md
+      
       // option we are offering
       const offerItem = {
-        itemType: ItemType.ERC1155,
+        itemType: ItemType.ERC1155,  // see Seaport ItemType enum
         token: VALOREM_CLEAR_ADDRESS,
         identifierOrCriteria: optionId,
         startAmount: fromH256(quoteRequest.amount),
@@ -178,7 +180,6 @@ async function respondToRfqs() {
       const in_2_mins = now + 2 * 60;  // offer expires in 2 minutes
       const salt = `0x${Buffer.from(randomBytes(8)).toString('hex').padStart(64, '0')}`
 
-      // see https://arbiscan.io/address/0x00000000006c3852cbEf3e08E8dF289169EdE581#code#F4#L1
       const orderComponents = {
         offerer: signer.address,
         zone: constants.AddressZero,
@@ -279,13 +280,20 @@ async function respondToRfqs() {
         order: signedOrder_H,
       });
 
-      console.log('Sending Quote Response with price of', USDCprice.toString(), 'USDC for', optionAmount.toString(), 'options.');
-      console.log(quoteResponse);
+      console.log('Sending Quote Response with price of', formatUnits(USDCprice, 6), 'USDC for', optionAmount.toString(), 'options.');
 
       // send response over RFQ service
-      var quoteResponseStream = async function* () {
+      const quoteResponseStream = async function* () {
         yield quoteResponse;
       };
+
+      // approve spend of option amount before sending offer
+      txReceipt = await (await optionTokenContract.connect(signer).setApprovalForAll(SEAPORT_ADDRESS, true)).wait();
+      if (txReceipt.status == 0) { 
+        console.log('Skipping responding to RFQ; Option ERC1155 token spend approval failed.');
+        continue;
+      };
+      
       rfqClient.maker(
         quoteResponseStream(), 
         {headers: [['cookie', cookie]]}
