@@ -80,7 +80,7 @@ const WETH_ADDRESS = '0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372';  // our mock 
 const underlyingAsset = WETH_ADDRESS; 
 const exerciseAsset = USDC_ADDRESS; 
 
-export async function createOption() {
+async function createOption() {
   const clearinghouseContract = new Contract(VALOREM_CLEAR_ADDRESS, IValoremOptionsClearinghouse, provider);
 
   const underlyingAmount = parseUnits('1', 18); // 1 WETH, 18 decimals
@@ -127,19 +127,11 @@ export async function createOption() {
 
 
 // 3. Send RFQ requests to Valorem Trade
-import { BigNumber, constants } from 'ethers';  // v5.5.0
-const { hexValue, formatUnits, joinSignature, hexlify } = utils;
+import { BigNumber } from 'ethers';  // v5.5.0
 import { RFQ } from '../gen/valorem/trade/v1/rfq_connect';  // generated from rfq.proto
 import { Action, QuoteRequest } from '../gen/valorem/trade/v1/rfq_pb';  // generated from rfq.proto
 import { ItemType } from '../gen/valorem/trade/v1/seaport_pb';  // generated from seaport.proto
 import { toH160, toH256 } from './lib/fromBNToH';  // library script for H number conversions
-import { fromH160, fromH256 } from './lib/fromHToBN';  // library script for H number conversions
-import ISeaport from '../../abi/ISeaport.json';
-import IERC20 from '../../abi/IERC20.json';
-
-const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581';  // seaport 1.1
-const seaportContract = new Contract(SEAPORT_ADDRESS, ISeaport, provider);
-const usdcContract = new Contract(USDC_ADDRESS, IERC20, provider);
 
 async function sendRfqRequests(optionId: BigNumber) {
   const rfqClient = createPromiseClient(RFQ, transport);
@@ -169,79 +161,94 @@ async function sendRfqRequests(optionId: BigNumber) {
       if (Object.keys(quoteResponse).length === 0) { continue };  // empty response
       console.log('Received a Quote Response...');
 
-      // convert order fields from H types back to BigNumbers
-      const signedOrder_H = quoteResponse.order;
-      const order_H = signedOrder_H.parameters;
-      const [ offerItem_H ] = order_H.offers;
-      const [ considerationItem_H ] = order_H.considerations;
-
-      const offerItem = {
-        itemType: offerItem_H.itemType,
-        token: hexValue(fromH160(offerItem_H.token)),
-        identifierOrCriteria: fromH256(offerItem_H.identifierOrCriteria),
-        startAmount: fromH256(offerItem_H.startAmount),
-        endAmount: fromH256(offerItem_H.endAmount),
-      };
-      const considerationItem = {
-        itemType: considerationItem_H.itemType,
-        token: hexValue(fromH160(considerationItem_H.token)),
-        identifierOrCriteria: fromH256(considerationItem_H.identifierOrCriteria),
-        startAmount: fromH256(considerationItem_H.startAmount),
-        endAmount: fromH256(considerationItem_H.endAmount),
-        recipient: hexValue(fromH160(considerationItem_H.recipient)),
-      };
-
-      if (considerationItem.token !== USDC_ADDRESS) { 
-        console.log('Skipping responding to RFQ; only accepting quotes in USDC.');
-        continue;
-      };
-
-      const OrderComponents = {
-        offerer: hexValue(fromH160(order_H.offerer)),
-        zone: hexValue(fromH160(order_H.zone)),
-        offer: [ offerItem ],
-        consideration: [ considerationItem ],
-        orderType: order_H.orderType,
-        startTime: fromH256(order_H.startTime),
-        endTime: fromH256(order_H.endTime),
-        zoneHash: fromH256(order_H.zoneHash),
-        salt: fromH256(order_H.salt),
-        conduitKey: fromH256(order_H.conduitKey),
-      };
-
-      const signature = joinSignature({
-        r: hexlify(signedOrder_H.signature.r),
-        s: hexlify(signedOrder_H.signature.s),
-        v: BigNumber.from(hexlify(signedOrder_H.signature.v)).toNumber(),
-      }) as `0x${string}`;
-
-      const signedOrder = {
-        parameters: OrderComponents,
-        signature: signature,
-      };
-
-      if (considerationItem.startAmount.gt(parseUnits('200', 6))) {  // assumes start and end amount are equal
-        console.log('Skipping responding to RFQ; only accepting quotes for 200 USDC or less.');
-        continue;
-      };
-
-      console.log('Accepting quote to buy option for', formatUnits(considerationItem.startAmount, 6) , 'USDC; Executing order on seaport.');
-
-      // approve seaport spend of usdc price
-      let txReceipt = await (await usdcContract.connect(signer).approve(SEAPORT_ADDRESS, considerationItem.startAmount)).wait();  // assumes start and end are the same
-      if (txReceipt.status == 0) {
-        console.log('Skipping executing order; USDC approval failed.');
-        continue;
-      };
-
-      txReceipt = await (await seaportContract.connect(signer).fulfillOrder(signedOrder, constants.HashZero)).wait();
-      if (txReceipt.status == 0) {
-        console.log('Skipping executing order; order fulfillment failed.');
-        continue;
-      };
-
-      // Fin!
+      await handleQuoteResponse(quoteResponse);
     };
+  };
+};
+
+
+// 4. Respond to Quotes from makers
+import { constants } from 'ethers';  // v5.5.0
+const { hexValue, formatUnits, joinSignature, hexlify } = utils;
+import { QuoteResponse } from '../gen/valorem/trade/v1/rfq_pb';  // generated from rfq.proto
+import { fromH160, fromH256 } from './lib/fromHToBN';  // library script for H number conversions
+import ISeaport from '../../abi/ISeaport.json';
+import IERC20 from '../../abi/IERC20.json';
+
+const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581';  // seaport 1.1
+const seaportContract = new Contract(SEAPORT_ADDRESS, ISeaport, provider);
+const usdcContract = new Contract(USDC_ADDRESS, IERC20, provider);
+
+async function handleQuoteResponse(quoteResponse: QuoteResponse) {
+  // convert order fields from H types back to BigNumbers
+  const signedOrder_H = quoteResponse.order;
+  const order_H = signedOrder_H.parameters;
+  const [ offerItem_H ] = order_H.offers;
+  const [ considerationItem_H ] = order_H.considerations;
+
+  const offerItem = {
+    itemType: offerItem_H.itemType,
+    token: hexValue(fromH160(offerItem_H.token)),
+    identifierOrCriteria: fromH256(offerItem_H.identifierOrCriteria),
+    startAmount: fromH256(offerItem_H.startAmount),
+    endAmount: fromH256(offerItem_H.endAmount),
+  };
+  const considerationItem = {
+    itemType: considerationItem_H.itemType,
+    token: hexValue(fromH160(considerationItem_H.token)),
+    identifierOrCriteria: fromH256(considerationItem_H.identifierOrCriteria),
+    startAmount: fromH256(considerationItem_H.startAmount),
+    endAmount: fromH256(considerationItem_H.endAmount),
+    recipient: hexValue(fromH160(considerationItem_H.recipient)),
+  };
+
+  if (considerationItem.token !== USDC_ADDRESS) { 
+    console.log('Skipping responding to RFQ; only accepting quotes in USDC.');
+    return;
+  };
+
+  const OrderComponents = {
+    offerer: hexValue(fromH160(order_H.offerer)),
+    zone: hexValue(fromH160(order_H.zone)),
+    offer: [ offerItem ],
+    consideration: [ considerationItem ],
+    orderType: order_H.orderType,
+    startTime: fromH256(order_H.startTime),
+    endTime: fromH256(order_H.endTime),
+    zoneHash: fromH256(order_H.zoneHash),
+    salt: fromH256(order_H.salt),
+    conduitKey: fromH256(order_H.conduitKey),
+  };
+
+  const signature = joinSignature({
+    r: hexlify(signedOrder_H.signature.r),
+    s: hexlify(signedOrder_H.signature.s),
+    v: BigNumber.from(hexlify(signedOrder_H.signature.v)).toNumber(),
+  }) as `0x${string}`;
+
+  const signedOrder = {
+    parameters: OrderComponents,
+    signature: signature,
+  };
+
+  if (considerationItem.startAmount.gt(parseUnits('200', 6))) {  // assumes start and end amount are equal
+    console.log('Skipping responding to RFQ; only accepting quotes for 200 USDC or less.');
+    return;
+  };
+
+  console.log('Accepting quote to buy option for', formatUnits(considerationItem.startAmount, 6) , 'USDC; Executing order on seaport.');
+
+  // approve seaport spend of usdc price
+  let txReceipt = await (await usdcContract.connect(signer).approve(SEAPORT_ADDRESS, considerationItem.startAmount)).wait();  // assumes start and end are the same
+  if (txReceipt.status == 0) {
+    console.log('Skipping executing order; USDC approval failed.');
+    return;
+  };
+
+  txReceipt = await (await seaportContract.connect(signer).fulfillOrder(signedOrder, constants.HashZero)).wait();
+  if (txReceipt.status == 0) {
+    console.log('Skipping executing order; order fulfillment failed.');
+    return;
   };
 };
 
@@ -254,4 +261,5 @@ async function main(){
 
 }
 
-// main();
+
+main();
