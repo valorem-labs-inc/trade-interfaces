@@ -115,7 +115,7 @@ message Order {
     /** The offers array contains an array of items that may be transferred
      * from the offerer's account.
      */
-    repeated OfferItem offers = 3;
+    repeated OfferItem offer = 3;
 
     /** The consideration contains an array of items that must be received
       * in order to fulfill the order. It contains all of the same components
@@ -124,7 +124,7 @@ message Order {
       * order fulfillment so as to support "tipping" (e.g. relayer or
       * referral payments)
      */
-    repeated ConsiderationItem considerations = 4;
+    repeated ConsiderationItem consideration = 4;
 
     OrderType order_type = 5;
 

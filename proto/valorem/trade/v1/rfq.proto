@@ -60,6 +60,12 @@ message QuoteRequest {
      * Maker, whereas Sell is the Taker wanting to sell to the Maker.
      */
     Action action = 7;
+
+    // The EIP-155 chain_id for the chain for which the order was signed.
+    H256 chain_id = 8; // Optional
+
+    // The address of the seaport contract for which the order was signed.
+    H160 seaport_address = 9; // Optional
 }
 
 // The quote response message contains the quote/signed offer from the maker.
@@ -74,4 +80,10 @@ message QuoteResponse {
 
     /** The order and signature from the maker. */
     SignedOrder order = 3;
+
+    // The EIP-155 chain_id for the chain for which the order was signed.
+    H256 chain_id = 4; // Optional
+
+    // The address of the seaport contract for which the order was signed.
+    H160 seaport_address = 5; // Optional
 }
