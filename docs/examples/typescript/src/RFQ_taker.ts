@@ -32,6 +32,7 @@ const transport = createGrpcTransport({
 });
 
 async function authenticateWithTrade() {
+  /* Authenticate with Valorem Trade */
   const authClient = createPromiseClient(Auth, transport);
   const { nonce } = await authClient.nonce({});
   const { chainId } = await provider.getNetwork();
@@ -81,6 +82,7 @@ const underlyingAsset = WETH_ADDRESS;
 const exerciseAsset = USDC_ADDRESS; 
 
 async function createOption() {
+  /* Initialize an option with Valorem Clearinghouse */
   const clearinghouseContract = new Contract(VALOREM_CLEAR_ADDRESS, IValoremOptionsClearinghouse, provider);
 
   const underlyingAmount = parseUnits('1', 18); // 1 WETH, 18 decimals
@@ -141,6 +143,7 @@ const seaportContract = new Contract(SEAPORT_ADDRESS, ISeaport, provider);
 const usdcContract = new Contract(USDC_ADDRESS, IERC20, provider);
 
 async function sendRfqRequests(optionId: BigNumber) {
+  /* Send RFQ requests, then and execute the returned signed offers on Seaport */
   const rfqClient = createPromiseClient(RFQ, transport);
 
   // Create your own quote request and response stream handling logic here!
@@ -166,12 +169,14 @@ async function sendRfqRequests(optionId: BigNumber) {
   while (true) {
     for await (const quoteResponse of rfqClient.taker(quoteRequestStream(), {headers: [['cookie', cookie]]})) {
       if (Object.keys(quoteResponse).length === 0) { continue };  // empty response
-      console.log('Received a Quote Response...');
+      console.log('Received a quote response...');
 
       // format the response into an order to be executed on seaport
       const signedOrder = await formatQuoteResponse(quoteResponse);
 
-      console.log('Accepting quote to buy', signedOrder.parameters.offer[0].startAmount, 'options for', formatUnits(signedOrder.parameters.consideration[0].startAmount, 6) , 'USDC; Executing order on Seaport.');
+      console.log('Accepting quote to buy', signedOrder.parameters.offer[0].startAmount, 'options for', formatUnits(signedOrder.parameters.consideration[0].startAmount, 6) , 'USDC.'); 
+      
+      console.log('Executing order on Seaport...');
 
       // first approve Seaport spend of usdc price
       let txReceipt = await (await usdcContract.connect(signer).approve(SEAPORT_ADDRESS, signedOrder.parameters.consideration[0].startAmount)).wait();  // assumes start and end are the same
@@ -185,17 +190,21 @@ async function sendRfqRequests(optionId: BigNumber) {
         console.log('Skipping executing order; order fulfillment failed.');
         return;
       };
+
+      console.log('Success!');
+      console.log('txn hash:', txReceipt.transactionHash);
     };
   };
 };
 
 
-// Format quotes from makers
+// 4. Format quote responses from makers into the signed order for Seaport
 const { hexValue, joinSignature, hexlify } = utils;
 import { QuoteResponse } from '../gen/valorem/trade/v1/rfq_pb';  // generated from rfq.proto
 import { fromH160, fromH256 } from './lib/fromHToBN';  // library script for H number conversions
 
 async function formatQuoteResponse(quoteResponse: QuoteResponse) {
+  /* Format quote responses from makers into the signed order for Seaport */
   // convert order fields from H types back to BigNumbers
   const signedOrder_H = quoteResponse.order;
   const order_H = signedOrder_H.parameters;
@@ -257,11 +266,9 @@ async function formatQuoteResponse(quoteResponse: QuoteResponse) {
 
 
 async function main(){
-
   await authenticateWithTrade();
   const optionId = await createOption();
   await sendRfqRequests(optionId);
-
 };
 
 
