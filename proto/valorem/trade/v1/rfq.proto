@@ -30,7 +30,7 @@ message QuoteRequest {
     /** The unique identifier for the quote request. This is used to match the
       * quote response to the quote request.
      */
-    optional H128 ulid = 1;                 // Optional
+    optional H128 ulid = 1;
 
     /** Ideally the maker would never know who the taker is, and vice-versa.
       * However, seaport reveals the makers' address to the taker.
@@ -52,7 +52,7 @@ message QuoteRequest {
      * and can optionally be zero for criteria-based item types to allow
      * for any identifier.
      */
-    optional H256 identifier_or_criteria = 5; // Optional
+    optional H256 identifier_or_criteria = 5;
 
     H256 amount = 6;
 
