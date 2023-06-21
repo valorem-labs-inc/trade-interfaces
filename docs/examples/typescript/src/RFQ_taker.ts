@@ -1,16 +1,6 @@
-import {
-  Action,
-  QuoteRequest,
-  QuoteResponse,
-} from '../gen/valorem/trade/v1/rfq_pb'; // generated from rfq.proto
-import { ItemType } from '../gen/valorem/trade/v1/seaport_pb'; // generated from seaport.proto
-import { Auth } from '../gen/valorem/trade/v1/auth_connect'; // generated from auth.proto
-import { RFQ } from '../gen/valorem/trade/v1/rfq_connect'; // generated from rfq.proto
-
 import { createPromiseClient } from '@bufbuild/connect';
 import { createGrpcTransport } from '@bufbuild/connect-node';
 import { SiweMessage } from 'siwe';
-
 import {
   constants,
   Contract,
@@ -19,8 +9,17 @@ import {
   Wallet,
   BigNumber,
 } from 'ethers'; // v5.5.0
-const { formatUnits, hexValue, hexlify, joinSignature, parseUnits } = utils;
 const { JsonRpcProvider } = providers;
+const { formatUnits, hexValue, hexlify, joinSignature, parseUnits } = utils;
+
+import { Auth } from '../gen/valorem/trade/v1/auth_connect'; // generated from auth.proto
+import { RFQ } from '../gen/valorem/trade/v1/rfq_connect'; // generated from rfq.proto
+import {
+  Action,
+  QuoteRequest,
+  QuoteResponse,
+} from '../gen/valorem/trade/v1/rfq_pb'; // generated from rfq.proto
+import { ItemType } from '../gen/valorem/trade/v1/seaport_pb'; // generated from seaport.proto
 
 import { getOptionId, OptionType } from './lib/getOptionId'; // emulates clearing house newOptionType to compute optionId
 import { toH160, toH256 } from './lib/fromBNToH'; // library script for H number conversions
@@ -30,20 +29,21 @@ import IValoremOptionsClearinghouse from '../../abi/IValoremOptionsClearinghouse
 import ISeaport from '../../abi/ISeaport.json';
 import IERC20 from '../../abi/IERC20.json';
 
-const PRIVATE_KEY =
-  '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'; // replace with account to use for signing
 const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
 const GRPC_ENDPOINT = 'https://exchange.valorem.xyz';
 const DOMAIN = 'exchange.valorem.xyz';
 const SECONDS_IN_A_WEEK = 60 * 60 * 24 * 7;
 
-const VALOREM_CLEAR_ADDRESS = '0x7513F78472606625A9B505912e3C80762f6C9Efb'; // Valorem Clearinghouse on Arb Goerli
+const VALOREM_CLEAR_ADDRESS = '0x7513F78472606625A9B505912e3C80762f6C9Efb'; // Valorem Clearinghouse on Arbitrum Goerli
 const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581'; // Seaport 1.1
-const USDC_ADDRESS = '0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458'; // our mock USDC on Arb Goerli
-const WETH_ADDRESS = '0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372'; // our mock Wrapped ETH on Arb Goerli
+const USDC_ADDRESS = '0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458'; // our mock USDC on Arbitrum Goerli
+const WETH_ADDRESS = '0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372'; // our mock Wrapped ETH on Arbitrum Goerli
 
 // 1. Authenticate with Valorem Trade
 const provider = new JsonRpcProvider(NODE_ENDPOINT);
+// replace with your own account to use for signing
+const PRIVATE_KEY =
+  '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 const signer = new Wallet(PRIVATE_KEY, provider);
 
 let cookie: string; // to be used for all server interactions
