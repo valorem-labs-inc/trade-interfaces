@@ -21,49 +21,8 @@ macro_rules! into_from {
     };
 }
 
-// TODO handle H40, H96 and H160
 into_from!(H128, ethers::types::H128, ethers::types::U128);
 into_from!(H256, ethers::types::H256, ethers::types::U256);
-
-// Ethers will always upscale the types if required (i.e. it doesn't define a type small enough
-// for it)
-impl From<ethers::types::H64> for H40 {
-    fn from(value: ethers::types::H64) -> Self {
-        Self {
-            hi: u32::from_be_bytes(*array_ref!(value, 0, 4)),
-            lo: u32::from_be_bytes(*array_ref!(value, 4, 4)),
-        }
-    }
-}
-
-impl From<H40> for ethers::types::H64 {
-    fn from(value: H40) -> Self {
-        let mut v = [0; Self::len_bytes()];
-        v[..4].copy_from_slice(&value.hi.to_be_bytes());
-        v[4..].copy_from_slice(&value.lo.to_be_bytes());
-        v.into()
-    }
-}
-
-// Ethers will always upscale the types if required (i.e. it doesn't define a type small enough
-// for it)
-impl From<ethers::types::H128> for H96 {
-    fn from(value: ethers::types::H128) -> Self {
-        Self {
-            hi: u64::from_be_bytes(*array_ref!(value, 0, 8)),
-            lo: u32::from_be_bytes(*array_ref!(value, 8, 4)),
-        }
-    }
-}
-
-impl From<H96> for ethers::types::H128 {
-    fn from(value: H96) -> Self {
-        let mut v = [0; Self::len_bytes()];
-        v[..8].copy_from_slice(&value.hi.to_be_bytes());
-        v[8..].copy_from_slice(&value.lo.to_be_bytes());
-        v.into()
-    }
-}
 
 impl From<ethers::types::H128> for H128 {
     fn from(value: ethers::types::H128) -> Self {
