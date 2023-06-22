@@ -7,6 +7,12 @@ use ethers::prelude::{
 };
 use ethers::utils::keccak256;
 use http::Uri;
+use siwe::{TimeStamp, Version};
+use std::ops::Mul;
+use std::{env, process::exit, sync::Arc};
+use time::OffsetDateTime;
+use tokio::sync::mpsc;
+use tonic::transport::{Channel, ClientTlsConfig};
 use valorem_trade_interfaces::bindings;
 use valorem_trade_interfaces::grpc_codegen;
 use valorem_trade_interfaces::grpc_codegen::{auth_client::AuthClient, Empty, VerifyText};
@@ -15,12 +21,6 @@ use valorem_trade_interfaces::grpc_codegen::{
     OrderType, QuoteRequest, QuoteResponse, SignedOrder, H256,
 };
 use valorem_trade_interfaces::utils::session_interceptor::SessionInterceptor;
-use siwe::{TimeStamp, Version};
-use std::ops::Mul;
-use std::{env, process::exit, sync::Arc};
-use time::OffsetDateTime;
-use tokio::sync::mpsc;
-use tonic::transport::{Channel, ClientTlsConfig};
 
 mod settings;
 
@@ -91,8 +91,10 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
     );
 
     // Setup a signer so we can send transactions
-    let settlement_engine =
-        bindings::valorem_clear::SettlementEngine::new(settings.settlement_contract, Arc::clone(&provider));
+    let settlement_engine = bindings::valorem_clear::SettlementEngine::new(
+        settings.settlement_contract,
+        Arc::clone(&provider),
+    );
     let signer =
         SignerMiddleware::new_with_provider_chain(Arc::clone(&provider), settings.wallet.clone())
             .await
@@ -462,13 +464,16 @@ async fn write_option<P: JsonRpcClient + 'static>(
         let topics = log_entry.topics.clone();
         let data = log_entry.data.to_vec();
 
-        let event = if let Ok(log) = bindings::valorem_clear::SettlementEngineEvents::decode_log(&RawLog { topics, data }) {
+        let event = if let Ok(log) =
+            bindings::valorem_clear::SettlementEngineEvents::decode_log(&RawLog { topics, data })
+        {
             log
         } else {
             continue;
         };
 
-        if let bindings::valorem_clear::SettlementEngineEvents::OptionsWrittenFilter(event) = event {
+        if let bindings::valorem_clear::SettlementEngineEvents::OptionsWrittenFilter(event) = event
+        {
             println!(
                 "Successfully written {:?} options. Option Id {:?}. Claim Id {:?}.",
                 event.amount, event.option_id, event.claim_id
