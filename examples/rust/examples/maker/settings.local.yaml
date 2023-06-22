@@ -1,0 +1,24 @@
+private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"  # funded anvil test account, used for broadcasting txns. see https://github.com/foundry-rs/foundry/tree/master/anvil
+
+node_endpoint: "http://localhost:8545"
+quay_endpoint: "https://localhost:8000"
+settlement_contract: "0x7513F78472606625A9B505912e3C80762f6C9Efb"
+magic_address: "0xb795f8278458443f6C43806C020a84EB5109403c"
+usdc_address: "0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458"
+weth_address: "0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372"
+wbtc_address: "0xf8Fe24D6Ea205dd5057aD2e5FE5e313AeFd52f2e"
+gmx_address: "0x5337deF26Da2506e08e37682b0d6E50b26a704BB"
+
+# Approve the example taker tokens for spending by the settlement contract
+approve_tokens: false
+
+# Whether to quote zeroes every 3rd time a quote is requested
+quote_zeroes: false
+
+# This is an optional setting, if not given a keystore will need to be provided on startup
+# keystore: "/path/to/keystore.ks"
+
+# These are an optional setting, if not given the default location of /etc/ssl/cert.pem will be used for the root
+# certificate authority for TLS certificate validation
+ca_root: "certs/rootCA.crt"
+domain_name: "localhost.com"

@@ -1,0 +1,15 @@
+private_key: "<PRIVATE KEY>"
+node_endpoint: "<NETWORK RPC URL>"
+quay_endpoint: "https://trade.valorem.xyz/"
+settlement_contract: "0x7513F78472606625A9B505912e3C80762f6C9Efb"
+
+# Approve the example taker tokens for spending by the settlement contract
+approve_tokens: false
+
+# This is an optional setting, if not given a keystore will need to be provided on startup
+# keystore: "/path/to/keystore.ks"
+
+# These are an optional setting, if not given the default location of /etc/ssl/cert.pem will be used for the root
+# certificate authority for TLS certificate validation
+# ca_root: "/etc/ssl/certs/ca-certificates.crt"
+# domain_name: "trade.valorem.xyz"

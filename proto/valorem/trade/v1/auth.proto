@@ -2,7 +2,7 @@ syntax = "proto3";
 
 import "types.proto";
 
-package quay;
+package valorem.trade.v1;
 
 /** Services and messages enabling EIP-4361 authentication via gRPC. */
 

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 import "types.proto";
 
-package quay;
+package valorem.trade.v1;
 
 /** Messages to support the Seaport smart contract interface via protobuf. */
 // Reference: https://docs.opensea.io/reference/seaport-overview

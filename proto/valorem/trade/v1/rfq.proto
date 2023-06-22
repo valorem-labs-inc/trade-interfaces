@@ -3,7 +3,7 @@ syntax = "proto3";
 import "types.proto";
 import "seaport.proto";
 
-package quay;
+package valorem.trade.v1;
 
 /**
  * Request for quote (RFQ) services and related message formats.
