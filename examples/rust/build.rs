@@ -2,7 +2,6 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     tonic_build::configure()
         .build_server(true)
-        //.out_dir("src/google")  // you can change the generated code's location
         .compile(
             &[
                 "../../proto/valorem/trade/v1/rfq.proto",

@@ -26,9 +26,9 @@ mod settings;
 
 const SESSION_COOKIE_KEY: &str = "set-cookie";
 
-/// An example Market Maker (MM) client interface to Quay.
+/// An example Market Maker (MM) client interface to Valorem.
 ///
-/// The Market Maker will receive Request For Quote (RFQ) from the Quay server formatted as
+/// The Market Maker will receive Request For Quote (RFQ) from the Valorem server formatted as
 /// `QuoteRequest` and the MM needs to respond with `QuoteResponse`.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -57,30 +57,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     unreachable!("Run function has returned from a while true loop");
 }
 
-// Main execution function. The Maker will execute the following use case.
-// 1. Connect and authorise itself with Quay
-// 2. Wait for an RFQ from the Taker
-// 3a. If the internal "randomness" counter is divisible by 3 and the order was a buy, the Maker will:
-//     Not offer a quote and move to step 2.
-// 3b. If the internal "randomness" counter is not divisible by 3 or the order was a sell, the Maker will:
-//     If the order was buy - Write to the Settlement contract for the amount of options
-//     (sourced from the RFQ) against the Option Type (sourced by the RFQ)
-//     Return a quote to the Taker.
-//     Move to step 2.
+// Main execution function. This is not expected to return.
 async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: Settings) {
     let session_cookie = setup(
-        settings.quay_endpoint.clone(),
+        settings.valorem_endpoint.clone(),
         settings.wallet.clone(),
         settings.tls_config.clone(),
         &provider,
     )
     .await;
 
-    let quote_zeroes = settings.quote_zeroes;
-
     // Now there is a valid authenticated session, connect to the RFQ stream
     let mut client = RfqClient::with_interceptor(
-        Channel::builder(settings.quay_endpoint.clone())
+        Channel::builder(settings.valorem_endpoint.clone())
             .tls_config(settings.tls_config.clone())
             .unwrap()
             .http2_keep_alive_interval(std::time::Duration::from_secs(75))
@@ -106,17 +95,17 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
         .unwrap();
     let seaport = bindings::seaport::Seaport::new(seaport_contract_address, Arc::clone(&provider));
 
-    // Approve the tokens the example will be using on Arbitrum Testnet
+    // Approve the tokens the example will be using
     if settings.approve_tokens {
         approve_tokens(&provider, settings, &signer, &settlement_engine, &seaport).await;
     }
 
-    // The stream to Quay might end for a couple of reasons, for example:
-    // * There are no clients connected after an RFQ
+    // The gRPC stream might end for a couple of reasons, for example:
+    // * There are no clients connected after a RFQ
     // * Infrastructure middle men (like Cloudflare) has killed the connection.
     println!("Ready for RFQs from Takers");
     loop {
-        // Setup the stream between us and Quay which the gRPC connection will use.
+        // Setup the stream between us and Valorem which the gRPC connection will use.
         let (tx_quote_response, rx_quote_response) = mpsc::channel::<QuoteResponse>(64);
         let mut quote_stream = client
             .maker(tokio_stream::wrappers::ReceiverStream::new(
@@ -126,46 +115,32 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
             .unwrap()
             .into_inner();
 
-        // Now we have received the servers request stream - loop until it ends.
+        // Now we have received the RFQ request stream - loop until it ends.
         while let Ok(Some(quote)) = quote_stream.message().await {
             let quote_offer =
-                handle_server_request(quote, &settlement_engine, &signer, &seaport, quote_zeroes)
+                handle_rfq_request(quote, &settlement_engine, &signer, &seaport, settings.usdc_address)
                     .await;
 
-            // Send the response to the server
             tx_quote_response.send(quote_offer).await.unwrap();
         }
     }
 }
 
-// Handle the quote.
-async fn handle_server_request<P: JsonRpcClient + 'static>(
+async fn handle_rfq_request<P: JsonRpcClient + 'static>(
     request_for_quote: QuoteRequest,
     settlement_engine: &bindings::valorem_clear::SettlementEngine<Provider<P>>,
     signer: &SignerMiddleware<Arc<Provider<P>>, LocalWallet>,
     seaport: &bindings::seaport::Seaport<Provider<P>>,
-    quote_zeroes: bool,
+    usdc_address: Address,
 ) -> QuoteResponse {
-    // Every 3rd buy offer we send back a NoOffer response, otherwise its the price/fee of the offer
+    // Return an offer with an hardcoded price in USDC.
     let fee = 10;
-    if fee % 3u64 == 0 && request_for_quote.action == i32::from(Action::Buy) && quote_zeroes {
-        let no_offer = create_no_offer(&request_for_quote, signer);
-        println!();
-        println!("\"Randomness\" value was divisible by 3. Returning no offer for the Buy Order.");
-        return no_offer;
-    }
 
     println!();
     println!(
         "RFQ received. Returning offer with {:?} as price.",
         U256::from(fee).mul(U256::exp10(6usize))
     );
-
-    // We like what we see from the RFQ, construct the offer. We use magic for the price as it has
-    // an open mint on the testnet.
-    let usdc_address = "0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458"
-        .parse::<Address>()
-        .unwrap();
 
     let request_action: Action = request_for_quote.action.into();
     let (offered_item, consideration_item) = match request_action {
@@ -254,7 +229,6 @@ async fn handle_server_request<P: JsonRpcClient + 'static>(
     let parameters = Order {
         zone: None,
         zone_hash: None,
-        // TODO Note: Issue 52 on Quay project.
         conduit_key: None,
 
         // OpenSea: Must be open order
@@ -293,7 +267,7 @@ async fn sign_order<P: JsonRpcClient + 'static>(
     // transformation code (this has no performance impact, just reads a little better).
     let order_parameters_copy = order_parameters.clone();
 
-    // In order to sign the seaport order, we firstly transform the Quay OrderParameters
+    // In order to sign the seaport order, we firstly transform the OrderParameters
     // into the ethers equivalents as we need to call the Seaport contract in order to get the
     // order hash.
     let mut offer = Vec::<valorem_trade_interfaces::bindings::seaport::OfferItem>::new();
@@ -405,8 +379,8 @@ async fn sign_order<P: JsonRpcClient + 'static>(
     }
 }
 
-// This function will call "write" on the SettlementEngine contract for the given Option Type
-// within the RFQ for the start_amount given within the RFQ
+// This function will call "write" on the SettlementEngine contract for the Option Type
+// and start_amount given within the RFQ
 async fn write_option<P: JsonRpcClient + 'static>(
     request_for_quote: &QuoteRequest,
     settlement_engine: &bindings::valorem_clear::SettlementEngine<Provider<P>>,
@@ -420,7 +394,8 @@ async fn write_option<P: JsonRpcClient + 'static>(
         .into();
     let amount: U256 = request_for_quote.amount.as_ref().unwrap().clone().into();
 
-    // Take gas estimation out of the equation which can be dicey on the testnet.
+    // Take gas estimation out of the equation which can be dicey on the Arbitrum testnet.
+    // todo - this is true for now, in the future we should check the chain id
     let gas = U256::from(500000u64);
     let gas_price = U256::from(200).mul(U256::exp10(8usize));
 
@@ -508,16 +483,16 @@ fn create_no_offer<P: JsonRpcClient + 'static>(
     }
 }
 
-// Connect and setup a valid session within Quay
+// Connect and setup a valid session
 async fn setup<P: JsonRpcClient + 'static>(
-    quay_uri: Uri,
+    valorem_uri: Uri,
     wallet: LocalWallet,
     tls_config: ClientTlsConfig,
     provider: &Arc<Provider<P>>,
 ) -> String {
-    // Connect and authenticate with Quay
+    // Connect and authenticate with Valorem
     let mut client: AuthClient<Channel> = AuthClient::new(
-        Channel::builder(quay_uri.clone())
+        Channel::builder(valorem_uri.clone())
             .tls_config(tls_config.clone())
             .unwrap()
             .connect()
@@ -527,7 +502,7 @@ async fn setup<P: JsonRpcClient + 'static>(
     let response = client
         .nonce(Empty::default())
         .await
-        .expect("Unable to fetch Nonce from Quay");
+        .expect("Unable to fetch Nonce");
 
     // Fetch the session cookie for all future requests
     let session_cookie = response
@@ -540,9 +515,9 @@ async fn setup<P: JsonRpcClient + 'static>(
 
     let nonce = response.into_inner().nonce;
 
-    // Verify & authenticate with Quay before connecting to RFQ endpoint.
+    // Verify & authenticate with Valorem before connecting to RFQ endpoint.
     let mut client = AuthClient::with_interceptor(
-        Channel::builder(quay_uri)
+        Channel::builder(valorem_uri)
             .tls_config(tls_config)
             .unwrap()
             .connect()
@@ -589,7 +564,6 @@ async fn setup<P: JsonRpcClient + 'static>(
     );
     let body = serde_json::Value::from(signed_message).to_string();
 
-    // Verify the session with Quay
     let response = client.verify(VerifyText { body }).await;
     match response {
         Ok(_) => (),
@@ -604,16 +578,15 @@ async fn setup<P: JsonRpcClient + 'static>(
     match response {
         Ok(_) => (),
         Err(error) => {
-            eprintln!("Unable to check authentication with Quay. Reported error:\n{error:?}");
+            eprintln!("Unable to check authentication with Valorem. Reported error:\n{error:?}");
             exit(3);
         }
     }
 
-    println!("Maker has authenticated with Quay");
+    println!("Maker has authenticated with Valorem");
     session_cookie
 }
 
-// Approve the test tokens to used within the Arbitrum testnet
 async fn approve_tokens<P: JsonRpcClient + 'static>(
     provider: &Arc<Provider<P>>,
     settings: Settings,
@@ -621,12 +594,13 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
     settlement_contract: &bindings::valorem_clear::SettlementEngine<Provider<P>>,
     seaport_contract: &bindings::seaport::Seaport<Provider<P>>,
 ) {
-    // Take gas estimation out of the equation which can be dicey on the testnet.
-    let gas = U256::from(200000000u64);
-    let gas_price = U256::from(5).mul(U256::exp10(8usize));
+    // Take gas estimation out of the equation which can be dicey on the Arbitrum testnet.
+    // todo - this is true for now, in the future we should check the chain id
+    let gas = U256::from(500000u64);
+    let gas_price = U256::from(200).mul(U256::exp10(8usize));
 
     // Approval for the Seaport contract
-    let erc20_contract = bindings::erc20::Erc20::new(settings.magic_address, Arc::clone(provider));
+    let erc20_contract = bindings::erc20::Erc20::new(settings.usdc_address, Arc::clone(provider));
     let mut approval_tx = erc20_contract
         .approve(seaport_contract.address(), U256::MAX)
         .tx;
@@ -639,9 +613,9 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
         .await
         .unwrap();
     println!(
-        "Approved Seaport ({:?}) to spend MAGIC ({:?})",
+        "Approved Seaport ({:?}) to spend USDC ({:?})",
         seaport_contract.address(),
-        settings.magic_address
+        settings.usdc_address
     );
 
     // Pre-approve all Options for Seaport
@@ -728,5 +702,22 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
     println!(
         "Approved Settlement Engine ({:?}) to spend GMX ({:?})",
         settings.settlement_contract, settings.gmx_address
+    );
+
+    let erc20_contract = bindings::erc20::Erc20::new(settings.magic_address, Arc::clone(provider));
+    let mut approve_tx = erc20_contract
+        .approve(settings.settlement_contract, U256::MAX)
+        .tx;
+    approve_tx.set_gas(gas);
+    approve_tx.set_gas_price(gas_price);
+    signer
+        .send_transaction(approve_tx, None)
+        .await
+        .unwrap()
+        .await
+        .unwrap();
+    println!(
+        "Approved Settlement Engine ({:?}) to spend MAGIC ({:?})",
+        settings.settlement_contract, settings.magic_address
     );
 }

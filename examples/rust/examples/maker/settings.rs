@@ -11,14 +11,13 @@ use tonic::transport::{Certificate, ClientTlsConfig};
 #[derive(Deserialize)]
 struct InnerSettings {
     node_endpoint: String,
-    quay_endpoint: String,
+    valorem_endpoint: String,
     settlement_contract: String,
     keystore: Option<String>,
     private_key: Option<String>,
     ca_root: Option<String>,
     domain_name: Option<String>,
     approve_tokens: bool,
-    quote_zeroes: bool,
     magic_address: String,
     usdc_address: String,
     weth_address: String,
@@ -28,12 +27,11 @@ struct InnerSettings {
 
 pub struct Settings {
     pub node_endpoint: String,
-    pub quay_endpoint: Uri,
+    pub valorem_endpoint: Uri,
     pub settlement_contract: Address,
     pub wallet: LocalWallet,
     pub tls_config: ClientTlsConfig,
     pub approve_tokens: bool,
-    pub quote_zeroes: bool,
     pub magic_address: Address,
     pub usdc_address: Address,
     pub weth_address: Address,
@@ -47,17 +45,15 @@ impl Settings {
             .add_source(File::with_name(file))
             .build()
             .unwrap();
-
         let inner: InnerSettings = settings.try_deserialize().unwrap();
 
-        // Local wallet, if the keystore was not given we need to request the private key instead.
         let wallet = if let Some(keystore) = inner.keystore {
             decrypt_keystore(&keystore)
         } else {
             fetch_private_key(inner.private_key)
         };
 
-        // TLS Configuration, use a standard path unless provided with an alternate
+        // TLS Configuration, use default settings unless provided with an alternate
         let pem = if let Some(ca_root) = inner.ca_root {
             read_to_string(ca_root).unwrap()
         } else {
@@ -66,7 +62,7 @@ impl Settings {
 
         let domain_name = inner
             .domain_name
-            .unwrap_or(String::from("exchange.valorem.xyz"));
+            .unwrap_or(String::from("trade.valorem.xyz"));
 
         let ca = Certificate::from_pem(pem);
         let tls_config = ClientTlsConfig::new()
@@ -75,7 +71,7 @@ impl Settings {
 
         Settings {
             node_endpoint: inner.node_endpoint,
-            quay_endpoint: inner.quay_endpoint.parse::<Uri>().unwrap(),
+            valorem_endpoint: inner.valorem_endpoint.parse::<Uri>().unwrap(),
             settlement_contract: inner.settlement_contract.parse::<Address>().unwrap(),
             magic_address: inner.magic_address.parse::<Address>().unwrap(),
             usdc_address: inner.usdc_address.parse::<Address>().unwrap(),
@@ -85,7 +81,6 @@ impl Settings {
             wallet,
             tls_config,
             approve_tokens: inner.approve_tokens,
-            quote_zeroes: inner.quote_zeroes,
         }
     }
 }
