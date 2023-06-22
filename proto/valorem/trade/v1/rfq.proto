@@ -30,7 +30,7 @@ message QuoteRequest {
     /** The unique identifier for the quote request. This is used to match the
       * quote response to the quote request.
      */
-    H128 ulid = 1;                 // Optional
+    optional H128 ulid = 1;
 
     /** Ideally the maker would never know who the taker is, and vice-versa.
       * However, seaport reveals the makers' address to the taker.
@@ -38,12 +38,12 @@ message QuoteRequest {
       * the maker and taker. Thought the trader may not always end up being
       * the taker.
      */
-    H160 taker_address = 2;         // Optional
+    optional H160 taker_address = 2;
 
     ItemType item_type = 3;
 
     // The token address for which a quote is being requested.
-    H160 token_address = 4;         // Optional
+    optional H160 token_address = 4;
 
     /** The identifier_or_criteria represents either the ERC721 or ERC1155
      * token identifier or, in the case of a criteria-based item type, a
@@ -52,7 +52,7 @@ message QuoteRequest {
      * and can optionally be zero for criteria-based item types to allow
      * for any identifier.
      */
-    H256 identifier_or_criteria = 5; // Optional
+    optional H256 identifier_or_criteria = 5;
 
     H256 amount = 6;
 
@@ -60,6 +60,12 @@ message QuoteRequest {
      * Maker, whereas Sell is the Taker wanting to sell to the Maker.
      */
     Action action = 7;
+
+    // The EIP-155 chain_id for the chain for which the quote is requested.
+    optional H256 chain_id = 8;
+
+    // The address of the seaport contract for which the quote is requested.
+    optional H160 seaport_address = 9;
 }
 
 // The quote response message contains the quote/signed offer from the maker.
@@ -67,11 +73,17 @@ message QuoteResponse {
     /** The unique identifier for the quote request. This is used to match the
       * quote response to the quote request.
      */
-    H128 ulid = 1;          // Optional
+    optional H128 ulid = 1;
 
     /** The address of the maker making the offer. */
-    H160 maker_address = 2;  // Optional
+    optional H160 maker_address = 2;
 
     /** The order and signature from the maker. */
     SignedOrder order = 3;
+
+    // The EIP-155 chain_id for the chain for which the offer was signed.
+    optional H256 chain_id = 4;
+
+    // The address of the seaport contract for which the offer was signed.
+    optional H160 seaport_address = 5;
 }

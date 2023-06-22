@@ -162,8 +162,6 @@ async function createOption() {
 
 // 3. Send RFQ requests, then and execute the returned signed offers on Seaport
 async function sendRfqRequests(optionId: BigNumber) {
-  /* Send RFQ requests, then and execute the returned signed offers on Seaport */
-
   const rfqClient = createPromiseClient(RFQ, transport);
 
   // Create your own quote request and response stream handling logic here!
