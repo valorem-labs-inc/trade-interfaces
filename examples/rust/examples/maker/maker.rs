@@ -623,7 +623,7 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
     println!(
         "Approved Seaport ({:?}) to spend MAGIC ({:?})",
         seaport_contract.address(),
-        settings.usdc_address
+        settings.magic_address
     );
 
     // Pre-approve all Options for Seaport
