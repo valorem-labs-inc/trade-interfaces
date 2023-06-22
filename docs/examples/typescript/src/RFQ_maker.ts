@@ -170,6 +170,7 @@ const clearinghouseContract = new Contract(
 );
 const wethContract = new Contract(WETH_ADDRESS, IERC20, provider);
 
+import ISeaport from '../../abi/ISeaport.json';
 async function constructQuoteResponse(quoteRequest: QuoteRequest) {
   /* Construct the signed Seaport offer for a quote request and wrap in a quote response */
   if (!quoteRequest.identifierOrCriteria) {
@@ -193,6 +194,7 @@ async function constructQuoteResponse(quoteRequest: QuoteRequest) {
 
   // get option info
   const optionInfo = await clearinghouseContract.option(optionId);
+
   if (optionInfo.underlyingAsset !== WETH_ADDRESS) {
     console.log(
       'Skipping Quote Request because only responding to WETH options.'
@@ -209,9 +211,8 @@ async function constructQuoteResponse(quoteRequest: QuoteRequest) {
   console.log(optionInfo);
 
   // approve clearing house transfer of underlying asset
-  const totalUnderlyingAmount = optionInfo.underlyingAmount
-    .mul(optionAmount)
-    .mul(10);
+  const totalUnderlyingAmount = optionAmount.mul(optionInfo.underlyingAmount); // number options * underlying amount per option
+
   let txReceipt = await (
     await wethContract
       .connect(signer)
@@ -254,7 +255,7 @@ async function constructQuoteResponse(quoteRequest: QuoteRequest) {
     startAmount: USDCprice.toString(),
     endAmount: USDCprice.toString(),
     recipient: signer.address,
-    identifierOrCriteria: BigNumber.from(0),
+    identifierOrCriteria: BigNumber.from(0), // not used for ERC20
   };
 
   const now = (await provider.getBlock(await provider.getBlockNumber()))
@@ -263,6 +264,9 @@ async function constructQuoteResponse(quoteRequest: QuoteRequest) {
   const salt = `0x${Buffer.from(randomBytes(8))
     .toString('hex')
     .padStart(64, '0')}`;
+
+  const seaportContract = new Contract(SEAPORT_ADDRESS, ISeaport, provider);
+  const counter = await seaportContract.getCounter(signer.address);
 
   const orderComponents = {
     offerer: signer.address,
@@ -275,6 +279,7 @@ async function constructQuoteResponse(quoteRequest: QuoteRequest) {
     zoneHash: constants.HashZero,
     salt: salt,
     conduitKey: constants.HashZero,
+    counter: counter,
   };
 
   // create order signature
