@@ -138,7 +138,7 @@ async function createOption() {
     console.log('Initializing option type with clearing house.');
     console.log('Option info:');
     console.log(option);
-    let txReceipt = await (
+     const txReceiptNewOption = await (
       await clearinghouseContract
         .connect(signer)
         .newOptionType(
@@ -150,7 +150,7 @@ async function createOption() {
           expiryTimestamp
         )
     ).wait();
-    if (txReceipt.status == 0) {
+    if (txReceiptNewOption.status == 0) {
       throw new Error('Option creation failed.');
     }
   } else {
@@ -210,7 +210,7 @@ async function sendRfqRequests(optionId: BigNumber) {
 
       const usdcContract = new Contract(USDC_ADDRESS, IERC20, provider);
 
-      let txReceipt = await (
+      const txReceiptApproveSeaport = await (
         await usdcContract
           .connect(signer)
           .approve(
@@ -218,7 +218,7 @@ async function sendRfqRequests(optionId: BigNumber) {
             signedOrder.parameters.consideration[0].startAmount
           )
       ).wait(); // assumes start and end are the same
-      if (txReceipt.status == 0) {
+      if (txReceiptApproveSeaport.status == 0) {
         console.log('Skipping executing order; USDC approval failed.');
         return;
       }
@@ -226,18 +226,18 @@ async function sendRfqRequests(optionId: BigNumber) {
       // then execute the order
       const seaportContract = new Contract(SEAPORT_ADDRESS, ISeaport, provider);
 
-      txReceipt = await (
+      const txReceiptFulfillOrder = await (
         await seaportContract
           .connect(signer)
           .fulfillOrder(signedOrder, constants.HashZero)
       ).wait();
-      if (txReceipt.status == 0) {
+      if (txReceiptFulfillOrder.status == 0) {
         console.log('Skipping executing order; order fulfillment failed.');
         return;
       }
 
       console.log('Success!');
-      console.log('txn hash:', txReceipt.transactionHash);
+      console.log('txn hash:', txReceiptFulfillOrder.transactionHash);
     }
   }
 }

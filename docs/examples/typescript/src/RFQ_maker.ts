@@ -213,12 +213,12 @@ async function constructQuoteResponse(quoteRequest: QuoteRequest) {
   // approve clearing house transfer of underlying asset
   const totalUnderlyingAmount = optionAmount.mul(optionInfo.underlyingAmount); // number options * underlying amount per option
 
-  let txReceipt = await (
+  const txReceiptApprove = await (
     await wethContract
       .connect(signer)
       .approve(VALOREM_CLEAR_ADDRESS, totalUnderlyingAmount)
   ).wait();
-  if (txReceipt.status == 0) {
+  if (txReceiptApprove.status == 0) {
     console.log(
       'Skipping responding to RFQ; Underlying ERC20 approval failed.'
     );
@@ -226,10 +226,10 @@ async function constructQuoteResponse(quoteRequest: QuoteRequest) {
   }
 
   // write option with clearing house
-  txReceipt = await (
+  const txReceiptWrite = await (
     await clearinghouseContract.connect(signer).write(optionId, optionAmount)
   ).wait();
-  if (txReceipt.status == 0) {
+  if (txReceiptWrite.status == 0) {
     console.log(
       'Skipping responding to RFQ; Writing option with clearing house failed.'
     );
