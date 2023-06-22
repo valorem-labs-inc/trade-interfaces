@@ -11,7 +11,7 @@ use tonic::transport::{Certificate, ClientTlsConfig};
 #[derive(Deserialize)]
 struct InnerSettings {
     node_endpoint: String,
-    quay_endpoint: String,
+    valorem_endpoint: String,
     settlement_contract: String,
     keystore: Option<String>,
     private_key: Option<String>,
@@ -22,7 +22,7 @@ struct InnerSettings {
 
 pub struct Settings {
     pub node_endpoint: String,
-    pub quay_endpoint: Uri,
+    pub valorem_endpoint: Uri,
     pub settlement_contract: Address,
     pub wallet: LocalWallet,
     pub tls_config: ClientTlsConfig,
@@ -38,7 +38,6 @@ impl Settings {
 
         let inner: InnerSettings = settings.try_deserialize().unwrap();
 
-        // Local wallet, if the keystore was not given we need to request the private key instead.
         let wallet = if let Some(keystore) = inner.keystore {
             decrypt_keystore(&keystore)
         } else {
@@ -54,7 +53,7 @@ impl Settings {
 
         let domain_name = inner
             .domain_name
-            .unwrap_or(String::from("exchange.valorem.xyz"));
+            .unwrap_or(String::from("trade.valorem.xyz"));
 
         let ca = Certificate::from_pem(pem);
         let tls_config = ClientTlsConfig::new()
@@ -63,7 +62,7 @@ impl Settings {
 
         Settings {
             node_endpoint: inner.node_endpoint,
-            quay_endpoint: inner.quay_endpoint.parse::<Uri>().unwrap(),
+            valorem_endpoint: inner.valorem_endpoint.parse::<Uri>().unwrap(),
             settlement_contract: inner.settlement_contract.parse::<Address>().unwrap(),
             wallet,
             tls_config,

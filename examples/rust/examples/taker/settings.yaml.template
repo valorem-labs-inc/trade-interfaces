@@ -1,15 +1,19 @@
-private_key: "<PRIVATE KEY>"
+# Private key is an optional setting to allow for quicker development/testing cycles, this should not be used
+# under operational context.
+#private_key: "<PRIVATE KEY>"
+
 node_endpoint: "<NETWORK RPC URL>"
-quay_endpoint: "https://trade.valorem.xyz/"
+valorem_endpoint: "https://trade.valorem.xyz/"
 settlement_contract: "0x7513F78472606625A9B505912e3C80762f6C9Efb"
 
-# Approve the example taker tokens for spending by the settlement contract
+# Approve the Taker Arbitrum testnet tokens for spending by the settlement contract & Seaport
 approve_tokens: false
 
-# This is an optional setting, if not given a keystore will need to be provided on startup
-# keystore: "/path/to/keystore.ks"
+# Keystore is an optional setting. If not given a private key will need to be provided on startup
+#keystore: "/path/to/keystore.ks"
 
-# These are an optional setting, if not given the default location of /etc/ssl/cert.pem will be used for the root
-# certificate authority for TLS certificate validation
-# ca_root: "/etc/ssl/certs/ca-certificates.crt"
-# domain_name: "trade.valorem.xyz"
+# TLS configuration is an optional setting.
+# If not given the location of /etc/ssl/cert.pem will be used for the root certificate authority and trade.valorem.xyz
+# for the domain name.
+#ca_root: "certs/rootCA.crt"
+#domain_name: "localhost.com"

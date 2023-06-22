@@ -11,7 +11,7 @@ weth_address: "0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372"
 wbtc_address: "0xf8Fe24D6Ea205dd5057aD2e5FE5e313AeFd52f2e"
 gmx_address: "0x5337deF26Da2506e08e37682b0d6E50b26a704BB"
 
-# Approve the example taker tokens for spending by the settlement contract
+# Approve the given Maker tokens for spending by the settlement contract & Seaport
 approve_tokens: false
 
 # Keystore is an optional setting. If not given a private key will need to be provided on startup

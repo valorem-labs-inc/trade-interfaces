@@ -117,9 +117,14 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
 
         // Now we have received the RFQ request stream - loop until it ends.
         while let Ok(Some(quote)) = quote_stream.message().await {
-            let quote_offer =
-                handle_rfq_request(quote, &settlement_engine, &signer, &seaport, settings.usdc_address)
-                    .await;
+            let quote_offer = handle_rfq_request(
+                quote,
+                &settlement_engine,
+                &signer,
+                &seaport,
+                settings.usdc_address,
+            )
+            .await;
 
             tx_quote_response.send(quote_offer).await.unwrap();
         }
@@ -594,13 +599,16 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
     settlement_contract: &bindings::valorem_clear::SettlementEngine<Provider<P>>,
     seaport_contract: &bindings::seaport::Seaport<Provider<P>>,
 ) {
+    // Note: This approval logic is tied to what the example Taker is doing and may need to
+    //       to be updated for your example
+
     // Take gas estimation out of the equation which can be dicey on the Arbitrum testnet.
     // todo - this is true for now, in the future we should check the chain id
     let gas = U256::from(500000u64);
     let gas_price = U256::from(200).mul(U256::exp10(8usize));
 
     // Approval for the Seaport contract
-    let erc20_contract = bindings::erc20::Erc20::new(settings.usdc_address, Arc::clone(provider));
+    let erc20_contract = bindings::erc20::Erc20::new(settings.magic_address, Arc::clone(provider));
     let mut approval_tx = erc20_contract
         .approve(seaport_contract.address(), U256::MAX)
         .tx;
@@ -613,7 +621,7 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
         .await
         .unwrap();
     println!(
-        "Approved Seaport ({:?}) to spend USDC ({:?})",
+        "Approved Seaport ({:?}) to spend MAGIC ({:?})",
         seaport_contract.address(),
         settings.usdc_address
     );

@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Main execution function. The Taker will execute the following use case.
-/// 1. Connect and authorise itself with Quay
+/// 1. Connect and authorise itself with Valorem
 /// 2. Create an Option Type
 /// 3. Request a buy quote from the Maker
 /// 4. If the Maker offers a quote:
@@ -66,8 +66,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// If there are any unexpected errors the function will print what information it has and then
 /// exit.
 async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: Settings) {
-    let session_cookie = setup_quay_connection(
-        settings.quay_endpoint.clone(),
+    let session_cookie = setup_valorem_connection(
+        settings.valorem_endpoint.clone(),
         settings.wallet.clone(),
         settings.tls_config.clone(),
         &provider,
@@ -76,7 +76,7 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
 
     // Now there is a valid authenticated session, connect to the RFQ stream
     let mut client = RfqClient::with_interceptor(
-        Channel::builder(settings.quay_endpoint.clone())
+        Channel::builder(settings.valorem_endpoint.clone())
             .tls_config(settings.tls_config.clone())
             .unwrap()
             .http2_keep_alive_interval(std::time::Duration::from_secs(75))
@@ -107,7 +107,7 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
         approve_test_tokens(&provider, &signer, &settlement_engine, &seaport).await;
     }
 
-    // Setup the stream between us and Quay which the gRPC connection will use.
+    // Setup the stream between us and Valorem which the gRPC connection will use.
     // Note: We don't setup any auto-reconnect functionality since we are only executing for a
     //       small amount of time. However this should be considered for an operational taker.
     let (tx_rfq, rx_rfq) = mpsc::channel::<QuoteRequest>(64);
@@ -120,11 +120,11 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
     // Create the option type we will use to request an RFQ on
     let option_id = setup_option(&settlement_engine, &signer).await;
 
-    // Take gas estimation out of the equation which can be dicey on the testnet.
+    // Take gas estimation out of the equation which can be dicey on the Arbitrum testnet.
     let gas = U256::from(500000u64);
     let gas_price = U256::from(2000).mul(U256::exp10(8usize));
 
-    // Now we have received the servers request stream - start the test case.
+    // Now we have received the gRPC server's request stream - start the test case.
     // Buy Order
     let rfq = QuoteRequest {
         ulid: None,
@@ -195,7 +195,7 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
                     .unwrap();
                 assert_eq!(owned_tokens, U256::from(5u8));
 
-                // Now sell the option right back
+                // Now sell all the options right back
                 // Sell Order
                 let rfq = QuoteRequest {
                     ulid: None,
@@ -311,16 +311,16 @@ fn transform_to_seaport_order(
     }
 }
 
-// Create and setup the connection to quay for use
-async fn setup_quay_connection<P: JsonRpcClient + 'static>(
-    quay_uri: Uri,
+// Create and setup the connection to Valorem
+async fn setup_valorem_connection<P: JsonRpcClient + 'static>(
+    valorem_uri: Uri,
     wallet: LocalWallet,
     tls_config: ClientTlsConfig,
     provider: &Arc<Provider<P>>,
 ) -> String {
-    // Connect and authenticate with Quay
+    // Connect and authenticate with Valorem
     let mut client: AuthClient<Channel> = AuthClient::new(
-        Channel::builder(quay_uri.clone())
+        Channel::builder(valorem_uri.clone())
             .tls_config(tls_config.clone())
             .unwrap()
             .connect()
@@ -330,7 +330,7 @@ async fn setup_quay_connection<P: JsonRpcClient + 'static>(
     let response = client
         .nonce(Empty::default())
         .await
-        .expect("Unable to fetch Nonce from Quay");
+        .expect("Unable to fetch Nonce");
 
     // Fetch the session cookie for all future requests
     let session_cookie = response
@@ -343,9 +343,9 @@ async fn setup_quay_connection<P: JsonRpcClient + 'static>(
 
     let nonce = response.into_inner().nonce;
 
-    // Verify & authenticate with Quay before connecting to RFQ endpoint.
+    // Verify & authenticate with Valorem before connecting to RFQ endpoint.
     let mut client = AuthClient::with_interceptor(
-        Channel::builder(quay_uri)
+        Channel::builder(valorem_uri)
             .tls_config(tls_config)
             .unwrap()
             .connect()
@@ -392,7 +392,6 @@ async fn setup_quay_connection<P: JsonRpcClient + 'static>(
     );
     let body = serde_json::Value::from(signed_message).to_string();
 
-    // Verify the session with Quay
     let response = client.verify(VerifyText { body }).await;
     match response {
         Ok(_) => (),
@@ -408,13 +407,13 @@ async fn setup_quay_connection<P: JsonRpcClient + 'static>(
         Ok(_) => (),
         Err(error) => {
             eprintln!(
-                "Error: Unable to check authentication with Quay. Reported error:\n{error:?}"
+                "Error: Unable to check authentication with Valorem. Reported error:\n{error:?}"
             );
             exit(1);
         }
     }
 
-    println!("Client has authenticated with Quay");
+    println!("Client has authenticated with Valorem");
     session_cookie
 }
 
@@ -427,13 +426,13 @@ async fn setup_option<P: JsonRpcClient + 'static>(
     contract: &bindings::valorem_clear::SettlementEngine<Provider<P>>,
     signer: &SignerMiddleware<Arc<Provider<P>>, LocalWallet>,
 ) -> U256 {
-    // MAGIC on arbitrum testnet
+    // MAGIC on Arbitrum testnet
     let underlying_asset = "0xb795f8278458443f6C43806C020a84EB5109403c"
         .parse::<Address>()
         .unwrap();
     let underlying_amount = U256::from_dec_str("5000000000000000000").unwrap().as_u128();
 
-    // GMX on arbitrum testnet
+    // GMX on Arbitrum testnet
     let exercise_asset = "0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458"
         .parse::<Address>()
         .unwrap();
@@ -463,7 +462,7 @@ async fn setup_option<P: JsonRpcClient + 'static>(
         )
         .tx;
 
-    // Take gas estimation out of the equation which can be dicey on the testnet.
+    // Take gas estimation out of the equation which can be dicey on the Arbitrum testnet.
     tx.set_gas(U256::from(500000u64));
     tx.set_gas_price(U256::from(2000).mul(U256::exp10(8usize)));
 
