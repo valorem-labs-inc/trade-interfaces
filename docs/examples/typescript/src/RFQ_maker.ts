@@ -33,6 +33,7 @@ import { toH160, toH256 } from './lib/fromBNToH'; // library script for H number
 import { fromH256 } from './lib/fromHToBN'; // library script for H number conversions
 
 import IValoremOptionsClearinghouse from '../../abi/IValoremOptionsClearinghouse.json';
+import ISeaport from '../../abi/ISeaport.json';
 import IERC1155 from '../../abi/IERC1155.json';
 import IERC20 from '../../abi/IERC20.json';
 
@@ -170,7 +171,6 @@ const clearinghouseContract = new Contract(
 );
 const wethContract = new Contract(WETH_ADDRESS, IERC20, provider);
 
-import ISeaport from '../../abi/ISeaport.json';
 async function constructQuoteResponse(quoteRequest: QuoteRequest) {
   /* Construct the signed Seaport offer for a quote request and wrap in a quote response */
   if (!quoteRequest.identifierOrCriteria) {
