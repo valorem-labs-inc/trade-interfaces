@@ -1,21 +1,14 @@
 # Valorem Trade Interfaces
 
-This repository contains API interfaces.
+The Valorem Trade API enables peer-to-peer, signature based, noncustodial
+digital asset trading via low latency [gRPC](https://grpc.io/docs/what-is-grpc/introduction/) and
+[gRPC-web](https://github.com/grpc/grpc-web)
+TLS-encrypted [version 3 protocol buffer](https://protobuf.dev/programming-guides/proto3/)
+interfaces, with order settlement via
+the [Seaport smart contracts](https://github.com/ProjectOpenSea/seaport). 
+This repository contains the protocol buffer definitions, example integrations, and 
+supporting libraries for using the Trade API.
 
+Full API reference documentation is available [here](https://valorem.xyz/docs/trade-api-reference/).
 
-Valorem Trade uses gRPC services and protobuf to achieve fast and efficient communication. This repository contains the protobuf definitions and related documentation.
-
-Of particular interest is the protobuf wire format for the [Seaport](https://github.com/ProjectOpenSea/seaport) marketplace, which underlies the Valorem exchange.
-
-
-## Getting Started
-
-Install dependancies
-```bash
-yarn install
-```
-
-Generate code from protobuf files using [Buf](https://www.npmjs.com/package/@bufbuild/buf), a modern replacement for Google's protobuf compiler.
-```
-npx buf generate proto
-```
+The public endpoint for the trade API is `https://trade.valorem.xyz`.
