@@ -38,8 +38,8 @@ import IERC1155 from '../../abi/IERC1155.json';
 import IERC20 from '../../abi/IERC20.json';
 
 const NODE_ENDPOINT = 'https://goerli-rollup.arbitrum.io/rpc';
-const GRPC_ENDPOINT = 'https://exchange.valorem.xyz';
-const DOMAIN = 'exchange.valorem.xyz';
+const GRPC_ENDPOINT = 'https://trade.valorem.xyz';
+const DOMAIN = 'trade.valorem.xyz';
 
 const VALOREM_CLEAR_ADDRESS = '0x7513F78472606625A9B505912e3C80762f6C9Efb'; // Valorem Clearinghouse on Arbitrum Goerli
 const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581'; // Seaport 1.1
