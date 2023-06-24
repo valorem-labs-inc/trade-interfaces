@@ -8,7 +8,7 @@ yarn-error.log*
 # Compiled output
 dist/
 build/
-docs/examples/typescript/gen/
+examples/typescript/gen/
 
 # Dependency directories
 node_modules/
