@@ -347,8 +347,8 @@ async function constructQuoteResponse(quoteRequest: QuoteRequest) {
   const order_H = new Order({
     offerer: toH160(orderComponents.offerer),
     zone: toH160(orderComponents.zone),
-    offers: [offerItem_H],
-    considerations: [considerationItem_H],
+    offer: [offerItem_H],
+    consideration: [considerationItem_H],
     orderType: orderComponents.orderType,
     startTime: toH256(orderComponents.startTime),
     endTime: toH256(orderComponents.endTime),
