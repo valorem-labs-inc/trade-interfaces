@@ -5,6 +5,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# TODO(Factor out non dev dependencies)
 anyhow = "1.0.71"
 arrayref = "0.3.7"
 http = "0.2.9"
@@ -15,6 +16,8 @@ tokio-stream = "0.1.12"
 tracing = "0.1.37"
 
 [dev-dependencies]
+anyhow = "1.0.71"
+backon = "0.4.1"
 rpassword = "7.2.0"
 
 [dependencies.config]

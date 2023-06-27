@@ -1,4 +1,5 @@
 use crate::settings::Settings;
+use backon::{ExponentialBuilder, Retryable};
 use ethers::abi::{AbiEncode, RawLog};
 use ethers::prelude::{
     rand::{thread_rng, Rng},
@@ -13,6 +14,7 @@ use std::{env, process::exit, sync::Arc};
 use time::OffsetDateTime;
 use tokio::sync::mpsc;
 use tonic::transport::{Channel, ClientTlsConfig};
+use tracing::warn;
 use valorem_trade_interfaces::bindings;
 use valorem_trade_interfaces::grpc_codegen;
 use valorem_trade_interfaces::grpc_codegen::{auth_client::AuthClient, Empty, VerifyText};
@@ -31,7 +33,8 @@ const SESSION_COOKIE_KEY: &str = "set-cookie";
 /// The Market Maker will receive Request For Quote (RFQ) from the Valorem server formatted as
 /// `QuoteRequest` and the MM needs to respond with `QuoteResponse`.
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), anyhow::Error> {
+    // TODO(DRY)
     let args: Vec<String> = env::args().skip(1).collect();
     if args.len() != 1 {
         eprintln!("Unexpected command line arguments. Received {:?}", args);
@@ -42,23 +45,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = Settings::load(&args[0]);
 
     if settings.node_endpoint.starts_with("http") {
-        let provider = Provider::<Http>::try_from(settings.node_endpoint.clone())?;
-        run(Arc::new(provider), settings).await;
+        let op = || async {
+            warn!("Re/starting maker");
+            run(Arc::new(Provider::<Http>::try_from(settings.node_endpoint.clone())?),
+                Settings::load(&args[0])).await
+        };
+
+        op.retry(
+            &ExponentialBuilder::default()
+                .with_jitter()
+                .with_max_times(10),
+        )
+            .await?;
     } else if settings.node_endpoint.starts_with("ws") {
         // Websockets (ws & wss)
-        let provider = Provider::<Ws>::new(Ws::connect(settings.node_endpoint.clone()).await?);
-        run(Arc::new(provider), settings).await;
+        let op = || async {
+            warn!("Re/starting maker");
+            run(Arc::new(Provider::<Ws>::new(Ws::connect(settings.node_endpoint.clone()).await?)),
+                Settings::load(&args[0])).await
+        };
+
+        op.retry(
+            &ExponentialBuilder::default()
+                .with_jitter()
+                .with_max_times(10),
+        )
+            .await?;
     } else {
         // IPC
-        let provider = Provider::connect_ipc(settings.node_endpoint.clone()).await?;
-        run(Arc::new(provider), settings).await;
+        let op = || async {
+            warn!("Re/starting maker");
+            run(Arc::new(Provider::connect_ipc(settings.node_endpoint.clone()).await?),
+                Settings::load(&args[0])).await
+        };
+
+        op.retry(
+            &ExponentialBuilder::default()
+                .with_jitter()
+                .with_max_times(10),
+        )
+            .await?;
     }
 
-    unreachable!("Run function has returned from a while true loop");
+    Ok(())
 }
 
 // Main execution function. This is not expected to return.
-async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: Settings) {
+async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: Settings) -> Result<(), anyhow::Error> {
     let session_cookie = setup(
         settings.valorem_endpoint.clone(),
         settings.wallet.clone(),
@@ -97,7 +130,7 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
 
     // Approve the tokens the example will be using
     if settings.approve_tokens {
-        approve_tokens(&provider, settings, &signer, &settlement_engine, &seaport).await;
+        approve_tokens(&provider, &settings, &signer, &settlement_engine, &seaport).await;
     }
 
     // The gRPC stream might end for a couple of reasons, for example:
@@ -594,7 +627,7 @@ async fn setup<P: JsonRpcClient + 'static>(
 
 async fn approve_tokens<P: JsonRpcClient + 'static>(
     provider: &Arc<Provider<P>>,
-    settings: Settings,
+    settings: &Settings,
     signer: &SignerMiddleware<Arc<Provider<P>>, LocalWallet>,
     settlement_contract: &bindings::valorem_clear::SettlementEngine<Provider<P>>,
     seaport_contract: &bindings::seaport::Seaport<Provider<P>>,
