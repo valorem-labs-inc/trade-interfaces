@@ -1,4 +1,5 @@
 use crate::settings::Settings;
+use backon::{ExponentialBuilder, Retryable};
 use ethers::abi::{AbiEncode, RawLog};
 use ethers::prelude::{
     rand::{thread_rng, Rng},
@@ -13,6 +14,7 @@ use std::{env, process::exit, sync::Arc};
 use time::OffsetDateTime;
 use tokio::sync::mpsc;
 use tonic::transport::{Channel, ClientTlsConfig};
+use tracing::{error, info, warn};
 use valorem_trade_interfaces::bindings;
 use valorem_trade_interfaces::grpc_codegen;
 use valorem_trade_interfaces::grpc_codegen::{auth_client::AuthClient, Empty, VerifyText};
@@ -21,8 +23,10 @@ use valorem_trade_interfaces::grpc_codegen::{
     OrderType, QuoteRequest, QuoteResponse, SignedOrder, H256,
 };
 use valorem_trade_interfaces::utils::session_interceptor::SessionInterceptor;
+use crate::tracing_utils::{get_subscriber, init_subscriber};
 
 mod settings;
+mod tracing_utils;
 
 const SESSION_COOKIE_KEY: &str = "set-cookie";
 
@@ -31,7 +35,11 @@ const SESSION_COOKIE_KEY: &str = "set-cookie";
 /// The Market Maker will receive Request For Quote (RFQ) from the Valorem server formatted as
 /// `QuoteRequest` and the MM needs to respond with `QuoteResponse`.
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), anyhow::Error> {
+    let subscriber = get_subscriber("trade-api-maker".into(), "info".into(), std::io::stdout);
+    init_subscriber(subscriber);
+
+    // TODO(DRY)
     let args: Vec<String> = env::args().skip(1).collect();
     if args.len() != 1 {
         eprintln!("Unexpected command line arguments. Received {:?}", args);
@@ -42,23 +50,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = Settings::load(&args[0]);
 
     if settings.node_endpoint.starts_with("http") {
-        let provider = Provider::<Http>::try_from(settings.node_endpoint.clone())?;
-        run(Arc::new(provider), settings).await;
+        let op = || async {
+            warn!("Re/starting maker");
+            run(Arc::new(Provider::<Http>::try_from(settings.node_endpoint.clone())?),
+                Settings::load(&args[0])).await
+        };
+
+        op.retry(
+            &ExponentialBuilder::default()
+                .with_jitter()
+                .with_max_times(10),
+        )
+            .await?;
     } else if settings.node_endpoint.starts_with("ws") {
         // Websockets (ws & wss)
-        let provider = Provider::<Ws>::new(Ws::connect(settings.node_endpoint.clone()).await?);
-        run(Arc::new(provider), settings).await;
+        let op = || async {
+            warn!("Re/starting maker");
+            run(Arc::new(Provider::<Ws>::new(Ws::connect(settings.node_endpoint.clone()).await?)),
+                Settings::load(&args[0])).await
+        };
+
+        op.retry(
+            &ExponentialBuilder::default()
+                .with_jitter()
+                .with_max_times(10),
+        )
+            .await?;
     } else {
         // IPC
-        let provider = Provider::connect_ipc(settings.node_endpoint.clone()).await?;
-        run(Arc::new(provider), settings).await;
+        let op = || async {
+            warn!("Re/starting maker");
+            run(Arc::new(Provider::connect_ipc(settings.node_endpoint.clone()).await?),
+                Settings::load(&args[0])).await
+        };
+
+        op.retry(
+            &ExponentialBuilder::default()
+                .with_jitter()
+                .with_max_times(10),
+        )
+            .await?;
     }
 
-    unreachable!("Run function has returned from a while true loop");
+    Ok(())
 }
 
 // Main execution function. This is not expected to return.
-async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: Settings) {
+async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: Settings) -> Result<(), anyhow::Error> {
     let session_cookie = setup(
         settings.valorem_endpoint.clone(),
         settings.wallet.clone(),
@@ -97,13 +135,13 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
 
     // Approve the tokens the example will be using
     if settings.approve_tokens {
-        approve_tokens(&provider, settings, &signer, &settlement_engine, &seaport).await;
+        approve_tokens(&provider, &settings, &signer, &settlement_engine, &seaport).await;
     }
 
     // The gRPC stream might end for a couple of reasons, for example:
     // * There are no clients connected after a RFQ
     // * Infrastructure middle men (like Cloudflare) has killed the connection.
-    println!("Ready for RFQs from Takers");
+    info!("Ready for RFQs from Takers");
     loop {
         // Setup the stream between us and Valorem which the gRPC connection will use.
         let (tx_quote_response, rx_quote_response) = mpsc::channel::<QuoteResponse>(64);
@@ -141,8 +179,7 @@ async fn handle_rfq_request<P: JsonRpcClient + 'static>(
     // Return an offer with an hardcoded price in USDC.
     let fee = 10;
 
-    println!();
-    println!(
+    info!(
         "RFQ received. Returning offer with {:?} as price.",
         U256::from(fee).mul(U256::exp10(6usize))
     );
@@ -150,7 +187,7 @@ async fn handle_rfq_request<P: JsonRpcClient + 'static>(
     let request_action: Action = request_for_quote.action.into();
     let (offered_item, consideration_item) = match request_action {
         Action::Buy => {
-            println!(
+            info!(
                 "Handling Buy Order for Option Type {:?}",
                 U256::from(request_for_quote.identifier_or_criteria.clone().unwrap())
             );
@@ -187,7 +224,7 @@ async fn handle_rfq_request<P: JsonRpcClient + 'static>(
         }
         Action::Sell => {
             let option_id = U256::from(request_for_quote.identifier_or_criteria.clone().unwrap());
-            println!("Handling Sell Order for Option Id {:?}", option_id);
+            info!("Handling Sell Order for Option Id {:?}", option_id);
 
             // We are offering the following price for the given option
             let price = OfferItem {
@@ -211,7 +248,7 @@ async fn handle_rfq_request<P: JsonRpcClient + 'static>(
             (price, option)
         }
         Action::Invalid => {
-            println!("Received invalid action from the RFQ, returning no offer");
+            info!("Received invalid action from the RFQ, returning no offer");
             let no_offer = create_no_offer(&request_for_quote, signer);
             return no_offer;
         }
@@ -410,9 +447,9 @@ async fn write_option<P: JsonRpcClient + 'static>(
     let pending_tx = match signer.send_transaction(write_tx, None).await {
         Ok(pending_tx) => pending_tx,
         Err(err) => {
-            eprintln!("WriteTxError: Reported error {err:?}");
-            eprintln!("WriteTxError: Unable to continue creation of offer. Failed to call write with Option Type {option_type:?}.");
-            eprintln!("WriteTxError: Returning no offer instead.");
+            warn!("WriteTxError: Reported error {err:?}");
+            warn!("WriteTxError: Unable to continue creation of offer. Failed to call write with Option Type {option_type:?}.");
+            warn!("WriteTxError: Returning no offer instead.");
             return None;
         }
     };
@@ -420,15 +457,15 @@ async fn write_option<P: JsonRpcClient + 'static>(
     let receipt = match pending_tx.await {
         Ok(Some(receipt)) => receipt,
         Ok(None) => {
-            eprintln!("WritePendingTxError: Did not get a pending transaction returned. This is bad since we made state changing call.");
-            eprintln!("WritePendingTxError: Unable to continue creation of offer.");
-            eprintln!("WritePendingTxError: Returning no offer instead.");
+            warn!("WritePendingTxError: Did not get a pending transaction returned. This is bad since we made state changing call.");
+            warn!("WritePendingTxError: Unable to continue creation of offer.");
+            warn!("WritePendingTxError: Returning no offer instead.");
             return None;
         }
         Err(err) => {
-            eprintln!("WritePendingTxError: Reported error {err:?}");
-            eprintln!("WritePendingTxError: Unable to continue creation of offer.");
-            eprintln!("WritePendingTxError: Returning no offer instead.");
+            warn!("WritePendingTxError: Reported error {err:?}");
+            warn!("WritePendingTxError: Unable to continue creation of offer.");
+            warn!("WritePendingTxError: Returning no offer instead.");
             return None;
         }
     };
@@ -454,7 +491,7 @@ async fn write_option<P: JsonRpcClient + 'static>(
 
         if let bindings::valorem_clear::SettlementEngineEvents::OptionsWrittenFilter(event) = event
         {
-            println!(
+            info!(
                 "Successfully written {:?} options. Option Id {:?}. Claim Id {:?}.",
                 event.amount, event.option_id, event.claim_id
             );
@@ -464,10 +501,10 @@ async fn write_option<P: JsonRpcClient + 'static>(
     }
 
     if option_id == U256::default() || claim_id == U256::default() {
-        eprintln!("WriteError: Option Id or Claim Id did not change from the default.");
-        eprintln!("WriteError: Option Id {option_id:?}. Claim Id {claim_id:?}.");
-        eprintln!("WriteError: Unable to continue creation of offer.");
-        eprintln!("WriteError: Returning no offer instead.");
+        warn!("WriteError: Option Id or Claim Id did not change from the default.");
+        warn!("WriteError: Option Id {option_id:?}. Claim Id {claim_id:?}.");
+        warn!("WriteError: Unable to continue creation of offer.");
+        warn!("WriteError: Returning no offer instead.");
         return None;
     }
 
@@ -573,7 +610,7 @@ async fn setup<P: JsonRpcClient + 'static>(
     match response {
         Ok(_) => (),
         Err(error) => {
-            eprintln!("Unable to verify client. Reported error:\n{error:?}");
+            error!("Unable to verify client. Reported error:\n{error:?}");
             exit(2);
         }
     }
@@ -583,18 +620,18 @@ async fn setup<P: JsonRpcClient + 'static>(
     match response {
         Ok(_) => (),
         Err(error) => {
-            eprintln!("Unable to check authentication with Valorem. Reported error:\n{error:?}");
+            error!("Unable to check authentication with Valorem. Reported error:\n{error:?}");
             exit(3);
         }
     }
 
-    println!("Maker has authenticated with Valorem");
+    info!("Maker has authenticated with Valorem");
     session_cookie
 }
 
 async fn approve_tokens<P: JsonRpcClient + 'static>(
     provider: &Arc<Provider<P>>,
-    settings: Settings,
+    settings: &Settings,
     signer: &SignerMiddleware<Arc<Provider<P>>, LocalWallet>,
     settlement_contract: &bindings::valorem_clear::SettlementEngine<Provider<P>>,
     seaport_contract: &bindings::seaport::Seaport<Provider<P>>,
@@ -620,7 +657,7 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
         .unwrap()
         .await
         .unwrap();
-    println!(
+    info!(
         "Approved Seaport ({:?}) to spend MAGIC ({:?})",
         seaport_contract.address(),
         settings.magic_address
@@ -638,7 +675,7 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
         .unwrap()
         .await
         .unwrap();
-    println!(
+    info!(
         "Pre-approved Seaport {:?} to move option tokens",
         seaport_contract.address()
     );
@@ -656,7 +693,7 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
         .unwrap()
         .await
         .unwrap();
-    println!(
+    info!(
         "Approved Settlement Engine ({:?}) to spend USDC ({:?})",
         settings.settlement_contract, settings.usdc_address
     );
@@ -673,7 +710,7 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
         .unwrap()
         .await
         .unwrap();
-    println!(
+    info!(
         "Approved Settlement Engine ({:?}) to spend WETH ({:?})",
         settings.settlement_contract, settings.weth_address
     );
@@ -690,7 +727,7 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
         .unwrap()
         .await
         .unwrap();
-    println!(
+    info!(
         "Approved Settlement Engine ({:?}) to spend WBTC ({:?})",
         settings.settlement_contract, settings.wbtc_address
     );
@@ -707,7 +744,7 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
         .unwrap()
         .await
         .unwrap();
-    println!(
+    info!(
         "Approved Settlement Engine ({:?}) to spend GMX ({:?})",
         settings.settlement_contract, settings.gmx_address
     );
@@ -724,7 +761,7 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
         .unwrap()
         .await
         .unwrap();
-    println!(
+    info!(
         "Approved Settlement Engine ({:?}) to spend MAGIC ({:?})",
         settings.settlement_contract, settings.magic_address
     );
