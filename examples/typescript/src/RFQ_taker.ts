@@ -249,8 +249,8 @@ async function formatQuoteResponse(quoteResponse: QuoteResponse) {
   // convert order fields from H types back to BigNumbers
   const signedOrder_H = quoteResponse.order;
   const order_H = signedOrder_H.parameters;
-  const [offerItem_H] = order_H.offers;
-  const [considerationItem_H] = order_H.considerations;
+  const [offerItem_H] = order_H.offer;
+  const [considerationItem_H] = order_H.consideration;
 
   const offerItem = {
     itemType: offerItem_H.itemType,
