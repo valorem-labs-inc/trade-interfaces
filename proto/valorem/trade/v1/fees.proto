@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+import "types.proto";
+
+package valorem.trade.v1;
+
+/* Service for getting Valorem Clear and Trade fee information. */
+service Fees {
+  // Returns the Valorem Fee structure.
+  rpc Fees(Empty) returns (FeesResponse);
+}
+
+message FeesResponse {
+  // A taker fee or rebate on notional value traded expressed in basis points.
+  int32 taker_fee_rebate_notional = 1;
+  // A maker fee or rebate on notional value traded expressed in basis points.
+  int32 maker_fee_rebate_notional = 2;
+  // A taker fee or rebate on premia or credit value traded expressed in basis points.
+  int32 taker_fee_rebate_premia_credit = 3;
+  // A maker fee or rebate on premia or credit value traded expressed in basis points.
+  int32 maker_fee_rebate_premia_credit = 4;
+  // A taker fee or rebate on spot value traded expressed in basis points.
+  int32 taker_fee_rebate_spot = 5;
+  // A maker fee or rebate on spot value traded expressed in basis points.
+  int32 maker_fee_rebate_spot = 6;
+  // A flat taker relayer fee or rebate expressed in USDC dust - used for non-valued offers/considerations
+  // such as NFTs.
+  int32 flat_maker_fee_rebate = 7;
+  // A flat maker relayer fee or rebate expressed in USDC dust - used for non-valued offers/considerations
+  // such as NFTs.
+  int32 flat_taker_fee_rebate = 8;
+  // A fee or rebate on notional value written via Clear expressed in basis points.
+  int32 clear_writer_notional_fee_rebate_bps = 9;
+  // A fee or rebate on notional value exercised via Clear expressed in basis points.
+  int32 clear_exercise_notional_fee_rebate_bps = 10;
+}
