@@ -141,7 +141,7 @@ async fn run<P: JsonRpcClient + 'static>(
             .await
             .unwrap();
 
-    // Seaport 1.1 contract address
+    // Seaport 1.5 contract address
     let seaport_contract_address = "0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC"
         .parse::<Address>()
         .unwrap();
