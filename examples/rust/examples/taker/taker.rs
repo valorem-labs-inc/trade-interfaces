@@ -96,7 +96,7 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
             .await
             .unwrap();
 
-    // Seaport 1.1
+    // Seaport address
     let seaport_contract_address = "0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC"
         .parse::<Address>()
         .unwrap();
