@@ -7,10 +7,10 @@ package valorem.trade.v1;
 /* Service for getting Valorem Clear and Trade fee information. */
 service Fees {
   // Returns the Valorem Fee structure.
-  rpc Fees(Empty) returns (FeesResponse);
+  rpc getFeeStructure(Empty) returns (FeeStructure);
 }
 
-message FeesResponse {
+message FeeStructure {
   // A taker fee or rebate on notional value traded expressed in basis points.
   int32 taker_fee_rebate_notional = 1;
   // A maker fee or rebate on notional value traded expressed in basis points.
@@ -33,4 +33,6 @@ message FeesResponse {
   int32 clear_writer_notional_fee_rebate_bps = 9;
   // A fee or rebate on notional value exercised via Clear expressed in basis points.
   int32 clear_exercise_notional_fee_rebate_bps = 10;
+  // The address fees must be paid to.
+  H160 fee_address = 11;
 }

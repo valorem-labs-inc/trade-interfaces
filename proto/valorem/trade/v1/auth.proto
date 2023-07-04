@@ -29,6 +29,3 @@ message NonceText {
 message VerifyText {
   string body = 1;
 }
-
-/** The empty message */
-message Empty {}
