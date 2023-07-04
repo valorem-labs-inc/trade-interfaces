@@ -42,7 +42,7 @@ const GRPC_ENDPOINT = 'https://trade.valorem.xyz';
 const DOMAIN = 'trade.valorem.xyz';
 
 const VALOREM_CLEAR_ADDRESS = '0x7513F78472606625A9B505912e3C80762f6C9Efb'; // Valorem Clearinghouse on Arbitrum Goerli
-const SEAPORT_ADDRESS = '0x00000000006c3852cbEf3e08E8dF289169EdE581'; // Seaport 1.1
+const SEAPORT_ADDRESS = '0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC'; // Seaport 1.5
 const USDC_ADDRESS = '0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458'; // our mock USDC on Arbitrum Goerli
 const WETH_ADDRESS = '0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372'; // our mock Wrapped ETH on Arbitrum Goerli
 

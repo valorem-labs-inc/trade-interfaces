@@ -97,7 +97,7 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
             .unwrap();
 
     // Seaport 1.1
-    let seaport_contract_address = "0x00000000006c3852cbEf3e08E8dF289169EdE581"
+    let seaport_contract_address = "0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC"
         .parse::<Address>()
         .unwrap();
     let seaport = bindings::seaport::Seaport::new(seaport_contract_address, Arc::clone(&provider));
