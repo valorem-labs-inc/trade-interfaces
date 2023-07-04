@@ -1,4 +1,5 @@
 use crate::settings::Settings;
+use crate::tracing_utils::{get_subscriber, init_subscriber};
 use backon::{ExponentialBuilder, Retryable};
 use ethers::abi::{AbiEncode, RawLog};
 use ethers::prelude::{
@@ -23,7 +24,6 @@ use valorem_trade_interfaces::grpc_codegen::{
     OrderType, QuoteRequest, QuoteResponse, SignedOrder, H256,
 };
 use valorem_trade_interfaces::utils::session_interceptor::SessionInterceptor;
-use crate::tracing_utils::{get_subscriber, init_subscriber};
 
 mod settings;
 mod tracing_utils;
@@ -52,8 +52,11 @@ async fn main() -> Result<(), anyhow::Error> {
     if settings.node_endpoint.starts_with("http") {
         let op = || async {
             warn!("Re/starting maker");
-            run(Arc::new(Provider::<Http>::try_from(settings.node_endpoint.clone())?),
-                Settings::load(&args[0])).await
+            run(
+                Arc::new(Provider::<Http>::try_from(settings.node_endpoint.clone())?),
+                Settings::load(&args[0]),
+            )
+            .await
         };
 
         op.retry(
@@ -61,13 +64,18 @@ async fn main() -> Result<(), anyhow::Error> {
                 .with_jitter()
                 .with_max_times(10),
         )
-            .await?;
+        .await?;
     } else if settings.node_endpoint.starts_with("ws") {
         // Websockets (ws & wss)
         let op = || async {
             warn!("Re/starting maker");
-            run(Arc::new(Provider::<Ws>::new(Ws::connect(settings.node_endpoint.clone()).await?)),
-                Settings::load(&args[0])).await
+            run(
+                Arc::new(Provider::<Ws>::new(
+                    Ws::connect(settings.node_endpoint.clone()).await?,
+                )),
+                Settings::load(&args[0]),
+            )
+            .await
         };
 
         op.retry(
@@ -75,13 +83,16 @@ async fn main() -> Result<(), anyhow::Error> {
                 .with_jitter()
                 .with_max_times(10),
         )
-            .await?;
+        .await?;
     } else {
         // IPC
         let op = || async {
             warn!("Re/starting maker");
-            run(Arc::new(Provider::connect_ipc(settings.node_endpoint.clone()).await?),
-                Settings::load(&args[0])).await
+            run(
+                Arc::new(Provider::connect_ipc(settings.node_endpoint.clone()).await?),
+                Settings::load(&args[0]),
+            )
+            .await
         };
 
         op.retry(
@@ -89,14 +100,17 @@ async fn main() -> Result<(), anyhow::Error> {
                 .with_jitter()
                 .with_max_times(10),
         )
-            .await?;
+        .await?;
     }
 
     Ok(())
 }
 
 // Main execution function. This is not expected to return.
-async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: Settings) -> Result<(), anyhow::Error> {
+async fn run<P: JsonRpcClient + 'static>(
+    provider: Arc<Provider<P>>,
+    settings: Settings,
+) -> Result<(), anyhow::Error> {
     let session_cookie = setup(
         settings.valorem_endpoint.clone(),
         settings.wallet.clone(),
@@ -127,8 +141,8 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
             .await
             .unwrap();
 
-    // Seaport 1.1 contract address
-    let seaport_contract_address = "0x00000000006c3852cbEf3e08E8dF289169EdE581"
+    // Seaport 1.5 contract address
+    let seaport_contract_address = "0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC"
         .parse::<Address>()
         .unwrap();
     let seaport = bindings::seaport::Seaport::new(seaport_contract_address, Arc::clone(&provider));
