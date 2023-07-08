@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+import "types.proto";
+
+package valorem.trade.v1;
+
+/**
+ * Soft Quotes (SQ) services and related message formats.
+ */
+
+message SoftQuoteRequest {
+    /** The exercise token address */
+    H160 exercise = 1;
+
+    /** The underlying token address */
+    H160 underlying_asset = 2;
+
+    /** The amount of options the Taker is interested in purchasing */
+    H256 amount = 3;
+
+    /** A request by the Taker to the Maker, i.e. if the request is Buy the Taker wants to buy the option from the
+     * Maker, whereas Sell is the Taker wanting to sell to the Maker.
+     */
+    Action action = 4;
+
+    /** The strike prices (in USD) the Taker wishes to get a soft quote on */
+    repeated float strike = 5;
+}
+
+message SoftQuoteResponse {
+    /** The prices (in USD) the Maker would approximately charge. The order of the prices is in the same order
+     * as the requested strikes.
+     */
+    repeated float price = 1;
+}
+
+service SoftQuotes {
+    /** Request soft quotes from makers via a single SoftQuoteRequest message and receive a stream of SoftQuoteResponse
+     * messages for use by gRPC-web clients.
+     */
+    rpc SoftQuoteWebTaker (SoftQuoteRequest) returns (stream SoftQuoteResponse);
+
+    /** Send approximate pricing to takers via a stream of SoftQuoteResponse messages and receive a stream of
+     * SoftQuoteRequest messages.
+     */
+    rpc SoftQuoteMaker (stream SoftQuoteResponse) returns (stream SoftQuoteResponse);
+}
