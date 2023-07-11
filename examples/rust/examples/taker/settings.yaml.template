@@ -15,5 +15,5 @@ approve_tokens: false
 # TLS configuration is an optional setting.
 # If not given the location of /etc/ssl/cert.pem will be used for the root certificate authority and trade.valorem.xyz
 # for the domain name.
-#ca_root: "../../certs/trade.valorem.xyz.pem"
+ca_root: "../../certs/trade.valorem.xyz.pem"
 #domain_name: "trade.valorem.xyz"
