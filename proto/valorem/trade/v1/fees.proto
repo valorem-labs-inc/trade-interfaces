@@ -22,3 +22,15 @@ message FeeStructure {
    // The address fees must be paid to.
    H160 fee_address = 6;
 }
+
+message Fees {
+  // A fee or rebate on notional value traded expressed in basis points.
+  int32 fee_rebate_notional = 1;
+  // A fee or rebate on premia or credit value traded expressed in basis points.
+  int32 fee_rebate_premia_credit = 2;
+  // A fee or rebate on spot value traded expressed in basis points.
+  int32 fee_rebate_spot = 3;
+  // A flat relayer fee or rebate expressed in USDC dust - used for non-valued offers/considerations
+  // such as NFTs.
+  int32 flat_fee_rebate = 4;
+}
