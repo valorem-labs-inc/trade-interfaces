@@ -14,23 +14,23 @@ message FeeStructure {
    Fees maker = 1;
    Fees taker = 2;
    // A fee or rebate on notional value written via Clear expressed in basis points.
-   int32 clear_write_notional_fee_rebate_bps = 3;
+   int32 clear_write_notional_bps = 3;
    // A fee or rebate on underlying asset notional value redeemed via Clear expressed in basis points.
-   int32 clear_redeemed_notional_fee_rebate_bps = 4;
+   int32 clear_redeemed_notional_bps = 4;
    // A fee or rebate on notional value exercised via Clear expressed in basis points.
-   int32 clear_exercise_notional_fee_rebate_bps = 5;
-   // The address fees must be paid to.
-   H160 fee_address = 6;
+   int32 clear_exercise_notional_bps = 5;
+   // The address fees must be paid to or rebates are received from.
+   H160 address = 6;
 }
 
 message Fees {
   // A fee or rebate on notional value traded expressed in basis points.
-  int32 fee_rebate_notional = 1;
+  int32 notional_bps = 1;
   // A fee or rebate on premia or credit value traded expressed in basis points.
-  int32 fee_rebate_premia_credit = 2;
+  int32 premia_bps = 2;
   // A fee or rebate on spot value traded expressed in basis points.
-  int32 fee_rebate_spot = 3;
+  int32 spot_bps = 3;
   // A flat relayer fee or rebate expressed in 1e-6 USDC (dust)g - used for non-valued offers/considerations
   // such as NFTs.
-  int32 flat_fee_rebate = 4;
+  int32 flat = 4;
 }
