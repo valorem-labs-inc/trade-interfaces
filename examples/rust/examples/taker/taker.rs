@@ -25,6 +25,7 @@ mod settings;
 const SESSION_COOKIE_KEY: &str = "set-cookie";
 const SECONDS_IN_A_DAY: u64 = 86400u64;
 const SECONDS_IN_THIRTY_MINUTES: u64 = 1800u64;
+const TOS_ACCEPTANCE: &str = "I accept the Valorem Terms of Service at https://app.valorem.xyz/tos and Privacy Policy at https://app.valorem.xyz/privacy";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -360,7 +361,7 @@ async fn setup_valorem_connection<P: JsonRpcClient + 'static>(
     let message = siwe::Message {
         domain: "localhost.com".parse().unwrap(),
         address: wallet.address().0,
-        statement: None,
+        statement: Some(TOS_ACCEPTANCE.into()),
         uri: "http://localhost/".parse().unwrap(),
         version: Version::V1,
         chain_id: provider.get_chainid().await.unwrap().as_u64(),
