@@ -27,7 +27,7 @@ message Fees {
   // A fee or rebate on notional value traded expressed in basis points.
   int32 notional_bps = 1;
   // A fee or rebate on premia or credit value traded expressed in basis points.
-  int32 premia_bps = 2;
+  int32 premium_bps = 2;
   // A fee or rebate on spot value traded expressed in basis points.
   int32 spot_bps = 3;
   // A flat relayer fee or rebate expressed in 1e-6 USDC (dust)g - used for non-valued offers/considerations
