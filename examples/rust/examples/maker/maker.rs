@@ -30,6 +30,8 @@ mod tracing_utils;
 
 const SESSION_COOKIE_KEY: &str = "set-cookie";
 
+const TOS_ACCEPTANCE: &str = "I accept the Valorem Terms of Service at https://app.valorem.xyz/tos and Privacy Policy at https://app.valorem.xyz/privacy";
+
 /// An example Market Maker (MM) client interface to Valorem.
 ///
 /// The Market Maker will receive Request For Quote (RFQ) from the Valorem server formatted as
@@ -588,7 +590,7 @@ async fn setup<P: JsonRpcClient + 'static>(
     let message = siwe::Message {
         domain: "localhost.com".parse().unwrap(),
         address: wallet.address().0,
-        statement: None,
+        statement: Some(TOS_ACCEPTANCE.into()),
         uri: "http://localhost/".parse().unwrap(),
         version: Version::V1,
         chain_id: provider.get_chainid().await.unwrap().as_u64(),
