@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+import "types.proto";
+
+package valorem.trade.v1;
+
+/* Service for getting Valorem Clear and Trade fee information. */
+service Fees {
+  // Returns the Valorem Fee structure.
+  rpc getFeeStructure(Empty) returns (FeeStructure);
+}
+
+message FeeStructure {
+   Fees maker = 1;
+   Fees taker = 2;
+   // A fee or rebate on notional value written via Clear expressed in basis points.
+   int32 clear_write_notional_bps = 3;
+   // A fee or rebate on underlying asset notional value redeemed via Clear expressed in basis points.
+   int32 clear_redeemed_notional_bps = 4;
+   // A fee or rebate on notional value exercised via Clear expressed in basis points.
+   int32 clear_exercise_notional_bps = 5;
+   // The address fees must be paid to or rebates are received from.
+   H160 address = 6;
+}
+
+message Fees {
+  // A fee or rebate on notional value traded expressed in basis points.
+  int32 notional_bps = 1;
+  // A fee or rebate on premia or credit value traded expressed in basis points.
+  int32 premium_bps = 2;
+  // A fee or rebate on spot value traded expressed in basis points.
+  int32 spot_bps = 3;
+  // A flat relayer fee or rebate expressed in 1e-6 USDC (dust)g - used for non-valued offers/considerations
+  // such as NFTs.
+  int32 flat = 4;
+}

@@ -40,3 +40,6 @@ message EthSignature {
   bytes s = 2;
   bytes v = 3;
 }
+
+/** The empty message */
+message Empty {}
