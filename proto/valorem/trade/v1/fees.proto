@@ -11,8 +11,8 @@ service Fees {
 }
 
 message FeeStructure {
-   Fees maker = 1;
-   Fees taker = 2;
+   TradeFees maker = 1;
+   TradeFees taker = 2;
    // A fee or rebate on notional value written via Clear expressed in basis points.
    int32 clear_write_notional_bps = 3;
    // A fee or rebate on underlying asset notional value redeemed via Clear expressed in basis points.
@@ -23,7 +23,7 @@ message FeeStructure {
    H160 address = 6;
 }
 
-message Fees {
+message TradeFees {
   // A fee or rebate on notional value traded expressed in basis points.
   int32 notional_bps = 1;
   // A fee or rebate on premia or credit value traded expressed in basis points.
