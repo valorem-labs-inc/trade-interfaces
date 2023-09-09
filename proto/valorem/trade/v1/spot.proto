@@ -19,7 +19,7 @@ service Spot {
   //   stream of SpotPriceResponse: Continuously streams data about the spot prices
   //                                of the requested tokens on their respective chains
   //                                as updates are available.
-  rpc GetSpotPriceStream (SpotPriceRequest) returns (stream SpotPriceResponse);
+  rpc GetSpotPrice (SpotPriceRequest) returns (stream SpotPriceResponse);
 }
 
 // SpotPriceRequest encapsulates the details of the tokens for which
