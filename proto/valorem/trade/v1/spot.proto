@@ -49,7 +49,7 @@ message SpotPriceInfo {
   // token_address is the Ethereum address of the token, usually in H160 format.
   H160 token_address = 2;
 
-  // spot_price, if available, is the current spot price of the token.
+  // spot_price, if available, is the current spot price in USD of the token.
   // It is represented in H256 format for high precision.
   // This field is optional since the spot price might not always be available
   // for every token, and because this message is reused in the request and
