@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+// Import additional EVM data types types.
+import "types.proto";
+
+package valorem.trade.v1;
+
+// Spot service offers methods related to the spot prices of tokens
+// on various Ethereum-related blockchains.
+service Spot {
+
+  // GetSpotPriceStream is a server-streaming RPC. It provides real-time spot prices
+  // for a list of tokens across multiple chains.
+  //
+  // Parameters:
+  //   SpotPriceRequest: Contains information about which tokens' spot prices
+  //                     should be fetched on their respective chains.
+  // Returns:
+  //   stream of SpotPriceResponse: Continuously streams data about the spot prices
+  //                                of the requested tokens on their respective chains
+  //                                as updates are available.
+  rpc GetSpotPriceStream (SpotPriceRequest) returns (stream SpotPriceResponse);
+}
+
+// SpotPriceRequest encapsulates the details of the tokens for which
+// spot prices are desired.
+message SpotPriceRequest {
+
+  // spot_price_info contains the details of each token (like its address and the
+  // chain it's on) for which the spot price should be fetched.
+  repeated SpotPriceInfo spot_price_info = 1;
+}
+
+// SpotPriceResponse provides the fetched spot prices for the tokens specified in the request.
+message SpotPriceResponse {
+
+  // spot_price_info holds the data about the fetched spot prices for each of the
+  // tokens specified in the request.
+  repeated SpotPriceInfo spot_price_info = 1;
+}
+
+// SpotPriceInfo represents the details and the spot price (if available) for a single token
+// on a particular blockchain.
+message SpotPriceInfo {
+
+  // chain_id denotes the specific Ethereum-compatible blockchain on which the token is located.
+  uint64 chain_id = 1;
+
+  // token_address is the Ethereum address of the token, usually in H160 format.
+  H160 token_address = 2;
+
+  // spot_price, if available, is the current spot price of the token.
+  // It is represented in H256 format for high precision.
+  // This field is optional since the spot price might not always be available
+  // for every token, and because this message is reused in the request and
+  // response stream.
+  optional H256 spot_price = 3;
+}
