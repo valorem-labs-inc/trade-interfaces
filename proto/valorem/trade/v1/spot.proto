@@ -5,8 +5,8 @@ import "types.proto";
 
 package valorem.trade.v1;
 
-// Spot service offers methods related to the spot prices of tokens
-// on various Ethereum-related blockchains.
+// Spot service offers methods related to the spot tokens
+// on various Ethereum-related chains.
 service Spot {
 
   // GetSpotPriceStream is a server-streaming RPC. It provides real-time spot prices
@@ -43,7 +43,7 @@ message SpotPriceResponse {
 // on a particular blockchain.
 message SpotPriceInfo {
 
-  // chain_id denotes the specific Ethereum-compatible blockchain on which the token is located.
+  // chain_id denotes the specific chain on which the token is located.
   uint64 chain_id = 1;
 
   // token_address is the Ethereum address of the token, usually in H160 format.
