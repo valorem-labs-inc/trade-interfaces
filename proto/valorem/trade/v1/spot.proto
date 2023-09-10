@@ -50,9 +50,9 @@ message SpotPriceInfo {
   H160 token_address = 2;
 
   // spot_price, if available, is the current spot price in USD of the token.
-  // It is represented in H256 format for high precision.
-  // This field is optional since the spot price might not always be available
-  // for every token, and because this message is reused in the request and
-  // response stream.
+  // It is represented in a 60x18 (42 integer digits, 18 decimals) H256 format
+  // for high precision. This field is optional since the spot price might not
+  // always be available for every token, and because this message is reused
+  // in the request and response stream.
   optional H256 spot_price = 3;
 }
