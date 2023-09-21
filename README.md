@@ -351,7 +351,7 @@ services provided by the API. The Auth service uses session cookies to store
 authentication information. Auth sessions are backed by
 cryptographically signed cookies. These cookies are generated when they’re
 not found or are otherwise invalid. When a valid, known cookie is received
-in a request, the session is hydrated from this cookie. These cookies validated
+in a request, the session is hydrated from this cookie. These cookies are validated
 server-side. This provides compatibility with both browser and
 non-browser clients "out of the box."
 
