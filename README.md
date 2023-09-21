@@ -22,23 +22,10 @@ There are two principal user roles in the Valorem Trade API:
 
 - **Taker**: Takers are users who request quotes from makers and optionally
   execute signed offers via the Seaport smart contracts. Takers are presently 
-  required to possess a [Valorem Access Pass]() to access the API.
+  required to possess a [Valorem Access Pass](https://opensea.io/collection/valorem-access-pass) to access the API.
 
 These protections are in place to ensure that the API is not abused during the
 early access period.
-
-## API overview
-
-The Valorem Trade API is composed of an RFQ (request-for-quote) service, and an Auth service
-using [SIWE (Sign-In with Ethereum)](https://docs.login.xyz/general-information/siwe-overview).
-
-The RFQ service allows authenticated, authorized takers to request quotes from makers, 
-and authenticated, authorized makers to return signed offers. Takers can then 
-execute those signed offers via Seaport.
-
-The Auth service enables users to 
-authenticate themselves and obtain the necessary credentials to authorize access to the 
-other services provided by the API.
 
 ## Errors and status codes
 
