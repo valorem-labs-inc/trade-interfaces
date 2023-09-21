@@ -33,10 +33,14 @@ There are two principal user roles in the Valorem Trade API:
 These protections are in place to ensure that the API is not abused during the
 early access period.
 
+## ALPN
+
+The Valorem Trade API supports HTTP/2 via the `h2` ALPN protocol.
+
 ## Keepalives and timeouts
 
-The Valorem Trade API sends http2 keepalives every 75 seconds and times out 
-after 10 seconds if a response is not received. Users of the API should use http2
+The Valorem Trade API sends HTTP/2 keepalives every 75 seconds and times out 
+after 10 seconds if a response is not received. Users of the API should use HTTP/2
 keepalives, and not issue TCP keepalives.
 
 ## Errors and status codes
