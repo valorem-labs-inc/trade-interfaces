@@ -1,4 +1,8 @@
-# Valorem Trade API Reference 
+# Valorem Trade API
+
+![Valorem Trade API](img/valorem-trade-api-banner.png)
+
+## Background
 
 The Valorem Trade API enables peer-to-peer, signature-based, noncustodial
 digital asset trading via low latency [gRPC](https://grpc.io/docs/what-is-grpc/introduction/) and
@@ -9,7 +13,9 @@ the [Seaport smart contracts](https://github.com/ProjectOpenSea/seaport).
 The complete protocol buffer definitions can be found
 in [this repository](https://github.com/valorem-labs-inc/trade-interfaces).
 
-The public endpoint for the exchange is `https://trade.valorem.xyz`.
+## Deployments
+
+The public endpoint for the Valorem Trade API is `https://trade.valorem.xyz`.
 
 ## User roles
 
@@ -26,6 +32,12 @@ There are two principal user roles in the Valorem Trade API:
 
 These protections are in place to ensure that the API is not abused during the
 early access period.
+
+## Keepalives and timeouts
+
+The Valorem Trade API sends http2 keepalives every 75 seconds and times out 
+after 10 seconds if a response is not received. Users of the API should use http2
+keepalives, and not issue TCP keepalives.
 
 ## Errors and status codes
 
