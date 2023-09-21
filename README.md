@@ -1,6 +1,6 @@
 # Valorem Trade API Reference 
 
-The Valorem Trade API enables peer-to-peer, signature based, noncustodial
+The Valorem Trade API enables peer-to-peer, signature-based, noncustodial
 digital asset trading via low latency [gRPC](https://grpc.io/docs/what-is-grpc/introduction/) and
 [gRPC-web](https://github.com/grpc/grpc-web)
 TLS-encrypted [version 3 protocol buffer](https://protobuf.dev/programming-guides/proto3/)
@@ -16,26 +16,29 @@ The public endpoint for the exchange is `https://trade.valorem.xyz`.
 There are two principal user roles in the Valorem Trade API:
 
 - **Maker**: Makers are users who sign offers in response to a request for quote.
-  They are responsible for fulfilling orders when a taker agrees to their quotes.
+  They are responsible for having the requisite assets when a taker optionally 
+  fills their signed offer. Makers are presently required to request access to
+  the maker API via the [Valorem discord](https://discord.gg/valorem).
 
 - **Taker**: Takers are users who request quotes from makers and optionally
-  execute signed offers via the Seaport smart contracts.
+  execute signed offers via the Seaport smart contracts. Takers are presently 
+  required to possess a [Valorem Access Pass]() to access the API.
+
+These protections are in place to ensure that the API is not abused during the
+early access period.
 
 ## API overview
 
 The Valorem Trade API is composed of an RFQ (request-for-quote) service, and an Auth service
 using [SIWE (Sign-In with Ethereum)](https://docs.login.xyz/general-information/siwe-overview).
-The RFQ service allows authenticated takers to request quotes from makers, and authenticated
-makers to return signed offers. Takers can then execute those signed offers
-via Seaport. The Auth service enables users to authenticate themselves and obtain the necessary
-credentials to access the other services provided by the API.
 
-## Health
+The RFQ service allows authenticated, authorized takers to request quotes from makers, 
+and authenticated, authorized makers to return signed offers. Takers can then 
+execute those signed offers via Seaport.
 
-The Valorem Trade API uses
-the [gRPC health checking protocol](https://github.com/grpc/grpc/blob/master/doc/health-checking.md)
-to provide a general health check endpoint, as well as endpoints for each of the services.
-Health checks for each service are available via `valorem.trade.v1.<service>`.
+The Auth service enables users to 
+authenticate themselves and obtain the necessary credentials to authorize access to the 
+other services provided by the API.
 
 ## Errors and status codes
 
@@ -309,7 +312,23 @@ message SignedOrder {
 }
 ```
 
-## Auth service
+## API Services
+
+### Health
+
+The Valorem Trade API uses
+the [gRPC health checking protocol](https://github.com/grpc/grpc/blob/master/doc/health-checking.md)
+to provide a general health check endpoint, as well as endpoints for each of the services.
+Health checks for each service are available via `grpc.health.v1.Health`, queryable
+by passing the Valorem service name `valorem.trade.v1.<service>`.
+
+### Reflection
+
+The Valorem Trade API uses the [gRPC reflection protocol](https://github.com/grpc/grpc/blob/master/doc/server-reflection.md)
+to provide service discovery and reflection. Reflection is available
+via `grpc.reflection.v1alpha.ServerReflection`.
+
+### Auth service
 
 The Authentication Service in Valorem Trade API enables users to authenticate
 themselves via SIWE, and receive the necessary credentials to access the other
@@ -319,9 +338,9 @@ cryptographically signed cookies. These cookies are generated when they’re
 not found or are otherwise invalid. When a valid, known cookie is received
 in a request, the session is hydrated from this cookie. These cookies validated
 server-side. This provides compatibility with both browser and
-non-browser clients "out of the box".
+non-browser clients "out of the box."
 
-Non browser clients must implement cookie storage and management themselves.
+Non-browser clients must implement cookie storage and management themselves.
 
 This service supports gRPC and gRPC-web clients.
 
@@ -331,9 +350,9 @@ service Auth {
 }
 ```
 
-### Methods
+#### Methods
 
-#### `Nonce`
+##### `Nonce`
 
 Returns an [EIP-4361](https://eips.ethereum.org/EIPS/eip-4361) nonce for the
 session and invalidates any existing session. This method resets session cookie,
@@ -343,15 +362,15 @@ which is passed back on the request.
 rpc Nonce (Empty) returns (NonceText);
 ```
 
-##### Unary request
+###### Unary request
 
 ```protobuf
 message Empty {}
 ```
 
-##### Unary response
+###### Unary response
 
-###### 0 OK
+`0 OK`
 
 The request was successful.
 
@@ -364,7 +383,7 @@ message NonceText {
 - `nonce` (`string`): a randomized token typically chosen by the Trade API, and
   used to prevent replay attacks, at least 8 alphanumeric characters UTF-8 encoded as plaintext.
 
-#### `Verify`
+##### `Verify`
 
 Verifies a valid SIWE message and returns the Ethereum address of the signer.
 Upon successful verification, the Auth session is updated.
@@ -373,7 +392,7 @@ Upon successful verification, the Auth session is updated.
 rpc Verify (VerifyText) returns (H160);
 ```
 
-##### Unary request
+###### Unary request
 
 ```protobuf
 message VerifyText {
@@ -394,9 +413,9 @@ Example signed and JSON encoded message:
 }
 ```
 
-##### Unary response
+###### Unary response
 
-###### 0 OK
+`0 OK`
 
 The request was successful, the response is the verified 160-bit address as an `H160`.
 
@@ -405,7 +424,7 @@ message H160 {
 }
 ```
 
-#### `Authenticate`
+##### `Authenticate`
 
 Checks if a given connection is authenticated and returns the authenticated
 address for an Auth session.
@@ -414,15 +433,15 @@ address for an Auth session.
 rpc Authenticate (Empty) returns (H160);
 ```
 
-##### Unary request
+###### Unary request
 
 ```protobuf
 message Empty {}
 ```
 
-##### Unary response
+###### Unary response
 
-###### 0 OK
+`0 OK`
 
 The request was successful, the response is the authenticated 160-bit address as an `H160`.
 
@@ -432,7 +451,7 @@ message H160 {
 
 ```
 
-## Fees service
+### Fees
 
 The Fees Service in Valorem Trade API provides information about the fees which
 must be paid to use the API. The Fees service uses session cookies to store
@@ -449,9 +468,9 @@ service Fees {
 }
 ```
 
-### Methods
+#### Methods
 
-#### `getFeeStructure`
+##### `getFeeStructure`
 
 Returns the `FeeStructure` for a user.
 
@@ -459,13 +478,13 @@ Returns the `FeeStructure` for a user.
 rpc getFeeStructure(Empty) returns (FeeStructure);
 ```
 
-##### Unary request
+###### Unary request
 
 ```protobuf
 message Empty {}
 ```
 
-##### Unary response
+###### Unary response
 
 ```protobuf
 message FeeStructure {
@@ -502,7 +521,7 @@ message TradeFees {
 - `flat` (`int32`): A flat relayer fee or rebate expressed in 1e-6 USDC (dust) - used for non-valued
   offers/considerations such as NFTs.
 
-## RFQ service
+### RFQ
 
 The RFQ (Request for Quote) service of the Valorem Trade API allows authenticated
 takers to request quotes from makers, for those makers to respond with signed
@@ -515,7 +534,7 @@ service RFQ {
 }
 ```
 
-### Fees
+#### Fees
 
 Responses from the RFQ service are subject to fees.
 Fees are determined by the maker and taker `FeeStructure` from the [Fees service](#fees-service).
@@ -523,40 +542,46 @@ The fees must be included in the offer as follows:
 
 For a long Valorem option buy:
 
-Two offer items, one of which is the RFQ'd option long token in the correct quantity, the second of which is a maker fee/rebate in USDC (if any).
+Two offer items, one of which is the RFQ'd option long token in the correct 
+quantity, the second of which is a maker fee/rebate in USDC (if any).
 
-Two consideration items, the USDC premia, and a taker fee/rebate in USDC (if any).
+Two consideration items, the USDC premia, and a taker fee/rebate in USDC 
+(if any).
 
 For a long Valorem option sell:
 
-Two offer items, one of which is the USDC credit, the other of which is a maker fee in USDC (if any).
+Two offer items, one of which is the USDC credit, the other of which is a maker 
+fee in USDC (if any).
 
-Two consideration items, one of which is the RFQ option long token in the correct quantity, the second of which is a
-taker fee in fee/rebate in USDC (if any).
+Two consideration items, one of which is the RFQ option long token in the 
+correct quantity, the second of which is a taker fee in fee/rebate in USDC 
+(if any).
 
 For a short Valorem option buy:
 
-Two offer items, one of which is an unexercised claim for the RFQ'd option type in the correct quantity, the second of
-which is the maker fee/rebate in USDC (if any).
+Two offer items, one of which is an unexercised claim for the RFQ'd option 
+type in the correct quantity, the second of which is the maker fee/rebate in 
+USDC (if any).
 
-Three consideration items, >= the USDC notional value at spot as quoted from uniswap, the USDC premia, the taker
-fee/rebate in USDC (if any).
+Three consideration items, >= the USDC notional value at spot as quoted from 
+uniswap, the USDC premia, the taker fee/rebate in USDC (if any).
 
 For a short Valorem option sell:
 
-Three offer items, >= the USDC notional value at spot as quoted from uniswap, the USDC premia, the maker fee/rebate in
-USDC (if any).
+Three offer items, >= the USDC notional value at spot as quoted from uniswap, 
+the USDC premia, the maker fee/rebate in USDC (if any).
 
-Two consideration items, one of which is an unexercised claim for the RFQ'd option type in the correct quantity, the
-second of which is the taker fee/rebate in USDC (if any).
+Two consideration items, one of which is an unexercised claim for the RFQ'd 
+option type in the correct quantity, the second of which is the taker 
+fee/rebate in USDC (if any).
 
-### Authentication
+#### Authentication and authorization
 
-Only authenticated users can access the RFQ service.
+Only authenticated and authorized users can access the RFQ service.
 
-### Methods
+#### Methods
 
-#### `Taker`
+##### `Taker`
 
 Request quotes from makers via a stream of `QuoteRequest` messages and receive
 a stream of `QuoteResponse` messages.
@@ -565,7 +590,7 @@ a stream of `QuoteResponse` messages.
 rpc Taker (stream QuoteRequest) returns (stream QuoteResponse);
 ```
 
-##### Request stream
+###### Request stream
 
 ```protobuf
 message QuoteRequest {
@@ -593,7 +618,7 @@ message QuoteRequest {
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-##### Response stream
+###### Response stream
 
 ```protobuf
 message QuoteResponse {
@@ -612,7 +637,7 @@ message QuoteResponse {
 - `seaport_address` (`H160`, optional): The Seaport address for the offer, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-#### `Maker`
+##### `Maker`
 
 Send quotes to takers via a stream of `QuoteResponse` messages and receive a
 stream of `QuoteRequest` messages.
@@ -621,7 +646,7 @@ stream of `QuoteRequest` messages.
 rpc Maker (stream QuoteResponse) returns (stream QuoteRequest);
 ```
 
-##### Request stream
+###### Request stream
 
 ```protobuf
 message QuoteResponse {
@@ -640,7 +665,7 @@ message QuoteResponse {
 - `seaport_address` (`H160`, optional): The Seaport address for the offer, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-##### Response stream
+###### Response stream
 
 ```protobuf
 message QuoteRequest {
@@ -668,7 +693,7 @@ message QuoteRequest {
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-#### `WebTaker`
+##### `WebTaker`
 
 Quotes from makers via a unary `QuoteRequest` message and receive a stream
 of `QuoteResponse` messages for use by gRPC-web clients such as browsers.
@@ -677,7 +702,7 @@ of `QuoteResponse` messages for use by gRPC-web clients such as browsers.
 rpc WebTaker (QuoteRequest) returns (stream QuoteResponse);
 ```
 
-##### Unary request
+###### Unary request
 
 ```protobuf
 message QuoteRequest {
@@ -705,7 +730,7 @@ message QuoteRequest {
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-##### Response stream
+###### Response stream
 
 ```protobuf
 message QuoteResponse {
