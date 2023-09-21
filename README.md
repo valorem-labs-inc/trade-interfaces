@@ -52,6 +52,12 @@ indicate the success or failure of an API call.
 This allows the client to programmatically determine the cause of an error and
 take appropriate action.
 
+## Rate limiting
+
+Rate limits are applied to certain services and methods in the Valorem Trade API. 
+These rate limits are subject to change and are not guaranteed. Details about 
+any applied rate limits can be found on the service and method documentation.
+
 ## Primitive data types
 
 The trade API defines some primitive data types mirroring a subset of
