@@ -10,8 +10,8 @@ digital asset trading via low latency [gRPC](https://grpc.io/docs/what-is-grpc/i
 TLS-encrypted [version 3 protocol buffer](https://protobuf.dev/programming-guides/proto3/)
 interfaces, with order settlement via
 the [Seaport smart contracts](https://github.com/ProjectOpenSea/seaport).
-The complete protocol buffer definitions can be found
-in [this repository](https://github.com/valorem-labs-inc/trade-interfaces).
+The complete protobuf definitions can be found
+[here](https://github.com/valorem-labs-inc/trade-interfaces/tree/main/proto/valorem/trade/v1).
 
 ## Deployments
 
@@ -21,12 +21,12 @@ The public endpoint for the Valorem Trade API is `https://trade.valorem.xyz`.
 
 There are two principal user roles in the Valorem Trade API:
 
-- **Maker**: Makers are users who sign offers in response to a request for quote.
+- **Maker**: Makers sign offers in response to requests for quotes (RFQs).
   They are responsible for having the requisite assets when a taker optionally 
   fills their signed offer. Makers are presently required to request access to
   the maker API via the [Valorem discord](https://discord.gg/valorem).
 
-- **Taker**: Takers are users who request quotes from makers and optionally
+- **Taker**: Takers request quotes from makers and optionally
   execute signed offers via the Seaport smart contracts. Takers are presently 
   required to possess a [Valorem Access Pass](https://opensea.io/collection/valorem-access-pass) to access the API.
 
@@ -346,14 +346,15 @@ via `grpc.reflection.v1alpha.ServerReflection`.
 ### Auth service
 
 The Authentication Service in Valorem Trade API enables users to authenticate
-themselves via SIWE, and receive the necessary credentials to access the other
+themselves via [Sign-In with Ethereum](https://docs.login.xyz/general-information/siwe-overview) (SIWE),
+and receive the necessary credentials to access the other
 services provided by the API. The Auth service uses session cookies to store
 authentication information. Auth sessions are backed by
 cryptographically signed cookies. These cookies are generated when they’re
 not found or are otherwise invalid. When a valid, known cookie is received
 in a request, the session is hydrated from this cookie. These cookies are validated
-server-side. This provides compatibility with both browser and
-non-browser clients "out of the box."
+server-side. This provides "out-of-the-box" compatibility with both browser and
+non-browser clients.
 
 Non-browser clients must implement cookie storage and management themselves.
 
@@ -506,16 +507,18 @@ message FeeStructure {
   TradeFees maker = 1;
   TradeFees taker = 2;
   int32 clear_write_notional_bps = 3;
-  int32 clear_redeemed_notional_bps = 4;
+  int32 clear_redeem_notional_bps = 4;
   int32 clear_exercise_notional_bps = 5;
   H160 address = 6;
 }
 ```
 
-- `maker` (`TradeFees`): The fees for a maker.
-- `taker` (`TradeFees`): The fees for a taker.
+Fees expressed as positive integers, rebates are expressed as negative integers.
+
+- `maker` (`TradeFees`): The fee or rebate for a maker.
+- `taker` (`TradeFees`): The fee or rebate for a taker.
 - `clear_write_notional_bps` (`int32`): A fee or rebate on notional value written via Clear expressed in basis points.
-- `clear_redeemed_notional_bps` (`int32`): A fee or rebate on underlying asset notional value redeemed via Clear
+- `clear_redeem_notional_bps` (`int32`): A fee or rebate on underlying asset notional value redeemed via Clear
   expressed in basis points.
 - `clear_exercise_notional_bps` (`int32`): A fee or rebate on notional value exercised via Clear expressed in basis
   points.
@@ -531,7 +534,7 @@ message TradeFees {
 ```
 
 - `notional_bps` (`int32`): A fee or rebate on notional value traded expressed in basis points.
-- `premium_bps` (`int32`): A fee or rebate on premia or credit value traded expressed in basis points.
+- `premium_bps` (`int32`): A fee or rebate on premium value traded expressed in basis points.
 - `spot_bps` (`int32`): A fee or rebate on spot value traded expressed in basis points.
 - `flat` (`int32`): A flat relayer fee or rebate expressed in 1e-6 USDC (dust) - used for non-valued
   offers/considerations such as NFTs.
@@ -555,40 +558,43 @@ Responses from the RFQ service are subject to fees.
 Fees are determined by the maker and taker `FeeStructure` from the [Fees service](#fees-service).
 The fees must be included in the offer as follows:
 
-For a long Valorem option buy:
+For a long Valorem option buy (opening a position):
 
-Two offer items, one of which is the RFQ'd option long token in the correct 
-quantity, the second of which is a maker fee/rebate in USDC (if any).
+- Two offer items:
+  - the RFQ'd option long token in the correct quantity,
+  - a maker fee/rebate in USDC (if any).
+- Two consideration items:
+  - the USDC premium debit,
+  - a taker fee/rebate in USDC (if any).
 
-Two consideration items, the USDC premia, and a taker fee/rebate in USDC 
-(if any).
+For a long Valorem option sell (closing a position):
 
-For a long Valorem option sell:
+- Two offer items:
+  - the USDC premium credit,
+  - a maker fee/rebate in USDC (if any).
+- Two consideration items:
+  - the RFQ option long token in the correct quantity,
+  - a taker fee in fee/rebate in USDC (if any).
 
-Two offer items, one of which is the USDC credit, the other of which is a maker 
-fee in USDC (if any).
+For a short Valorem option sell (opening a position):
 
-Two consideration items, one of which is the RFQ option long token in the 
-correct quantity, the second of which is a taker fee in fee/rebate in USDC 
-(if any).
+- Three offer items,
+  - >= the USDC notional value at spot as quoted from Uniswap,
+  - the USDC premium credit,
+  - the maker fee/rebate in USDC (if any).
+- Two consideration items,
+  - an unexercised short claim NFT for the RFQ'd option type in the correct quantity,
+  - a taker fee/rebate in USDC (if any).
 
-For a short Valorem option buy:
+For a short Valorem option buy (closing a position):
 
-Two offer items, one of which is an unexercised claim for the RFQ'd option 
-type in the correct quantity, the second of which is the maker fee/rebate in 
-USDC (if any).
-
-Three consideration items, >= the USDC notional value at spot as quoted from 
-uniswap, the USDC premia, the taker fee/rebate in USDC (if any).
-
-For a short Valorem option sell:
-
-Three offer items, >= the USDC notional value at spot as quoted from uniswap, 
-the USDC premia, the maker fee/rebate in USDC (if any).
-
-Two consideration items, one of which is an unexercised claim for the RFQ'd 
-option type in the correct quantity, the second of which is the taker 
-fee/rebate in USDC (if any).
+- Two offer items,
+  - an unexercised claim short NFT for the RFQ'd option type in the correct quantity,
+  - a maker fee/rebate in USDC (if any).
+- Three consideration items,
+  - >= the USDC notional value at spot as quoted from Uniswap,
+  - the USDC premium debit
+  - a taker fee/rebate in USDC (if any).
 
 #### Authentication and authorization
 
