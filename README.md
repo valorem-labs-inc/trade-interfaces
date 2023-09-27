@@ -11,7 +11,7 @@ TLS-encrypted [version 3 protocol buffer](https://protobuf.dev/programming-guide
 interfaces, with order settlement via
 the [Seaport smart contracts](https://github.com/ProjectOpenSea/seaport).
 The complete protobuf definitions can be found
-[here](https://github.com/valorem-labs-inc/trade-interfaces/tree/main/proto/valorem/trade/v1).
+[here](https://github.com/valorem-labs-inc/trade-interfaces/tree/main/proto/).
 
 ## Deployments
 
@@ -507,7 +507,7 @@ message FeeStructure {
   TradeFees maker = 1;
   TradeFees taker = 2;
   int32 clear_write_notional_bps = 3;
-  int32 clear_redeem_notional_bps = 4;
+  int32 clear_redeemed_notional_bps = 4;
   int32 clear_exercise_notional_bps = 5;
   H160 address = 6;
 }
@@ -518,7 +518,7 @@ Fees expressed as positive integers, rebates are expressed as negative integers.
 - `maker` (`TradeFees`): The fee or rebate for a maker.
 - `taker` (`TradeFees`): The fee or rebate for a taker.
 - `clear_write_notional_bps` (`int32`): A fee or rebate on notional value written via Clear expressed in basis points.
-- `clear_redeem_notional_bps` (`int32`): A fee or rebate on underlying asset notional value redeemed via Clear
+- `clear_redeemed_notional_bps` (`int32`): A fee or rebate on underlying asset notional value redeemed via Clear
   expressed in basis points.
 - `clear_exercise_notional_bps` (`int32`): A fee or rebate on notional value exercised via Clear expressed in basis
   points.
