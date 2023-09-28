@@ -131,12 +131,12 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
         ulid: None,
         taker_address: Some(settings.wallet.address().into()),
         item_type: ItemType::Erc1155 as i32,
-        token_address: None,
+        token_address: Some(settings.settlement_contract.into()),
         identifier_or_criteria: Some(option_id.into()),
         amount: Some(U256::from(5u8).into()),
         action: Action::Buy as i32,
-        chain_id: None,
-        seaport_address: None,
+        chain_id: Some(U256::from(settings.chain_id).into()),
+        seaport_address: Some(seaport_contract_address.into()),
     };
 
     let mut sell_rfq = false;
@@ -147,84 +147,93 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
 
     loop {
         // We expect the message to be returned on the stream back
-        if let Ok(Some(offer)) = rfq_stream.message().await {
-            if offer.order.is_none() {
-                println!("Maker did not wish to make a quote on the Order.");
-                println!();
-                println!("Sending Buy RFQ to Maker for Option Type {:?}", option_id);
-                tx_rfq.send(rfq.clone()).await.unwrap();
-                continue;
-            }
+        match rfq_stream.message().await {
+            Ok(Some(offer)) => {
+                if offer.order.is_none() {
+                    println!("Maker did not wish to make a quote on the Order.");
+                    println!();
+                    println!("Sending Buy RFQ to Maker for Option Type {:?}", option_id);
+                    tx_rfq.send(rfq.clone()).await.unwrap();
+                    continue;
+                }
 
-            let offered_order = offer.order.unwrap();
-            let offer_parameters = offered_order.parameters.clone().unwrap();
-            println!(
-                "Received offer from Maker. {:?} ({:?}) for {:?} options",
-                U256::from(
-                    offer_parameters.consideration[0]
-                        .start_amount
-                        .clone()
-                        .unwrap()
-                ),
-                Address::from(offer_parameters.consideration[0].token.clone().unwrap()),
-                U256::from(offer_parameters.offer[0].start_amount.clone().unwrap()),
-            );
+                let offered_order = offer.order.unwrap();
+                let offer_parameters = offered_order.parameters.clone().unwrap();
+                println!(
+                    "Received offer from Maker. {:?} ({:?}) for {:?} options",
+                    U256::from(
+                        offer_parameters.consideration[0]
+                            .start_amount
+                            .clone()
+                            .unwrap()
+                    ),
+                    Address::from(offer_parameters.consideration[0].token.clone().unwrap()),
+                    U256::from(offer_parameters.offer[0].start_amount.clone().unwrap()),
+                );
 
-            let order = transform_to_seaport_order(&offered_order, offer_parameters);
-            let option_id = order.parameters.offer[0].identifier_or_criteria;
+                let order = transform_to_seaport_order(&offered_order, offer_parameters);
+                let option_id = order.parameters.offer[0].identifier_or_criteria;
 
-            let mut order_tx = seaport.fulfill_order(order, [0u8; 32]).tx;
-            order_tx.set_gas(gas);
-            order_tx.set_gas_price(gas_price);
-            let pending_tx = match signer.send_transaction(order_tx, None).await {
-                Ok(pending_tx) => pending_tx,
-                Err(error) => {
-                    eprintln!("Error: Unable to send fulfill order transaction to Seaport for fulfillment.");
-                    eprintln!("Reported error: {:?}", error);
+                let mut order_tx = seaport.fulfill_order(order, [0u8; 32]).tx;
+                order_tx.set_gas(gas);
+                order_tx.set_gas_price(gas_price);
+                let pending_tx = match signer.send_transaction(order_tx, None).await {
+                    Ok(pending_tx) => pending_tx,
+                    Err(error) => {
+                        eprintln!("Error: Unable to send fulfill order transaction to Seaport for fulfillment.");
+                        eprintln!("Reported error: {:?}", error);
+                        exit(1);
+                    }
+                };
+
+                // Wait until the tx has been handled by the sequencer.
+                pending_tx.await.unwrap();
+
+                if !sell_rfq {
+                    let owned_tokens = settlement_engine
+                        .balance_of(signer.address(), option_id)
+                        .call()
+                        .await
+                        .unwrap();
+                    assert_eq!(owned_tokens, U256::from(5u8));
+
+                    // Now sell all the options right back
+                    // Sell Order
+                    let rfq = QuoteRequest {
+                        ulid: None,
+                        taker_address: Some(settings.wallet.address().into()),
+                        item_type: ItemType::Erc1155 as i32,
+                        token_address: Some(settlement_engine.address().into()),
+                        identifier_or_criteria: Some(option_id.into()),
+                        amount: Some(U256::from(5u8).into()),
+                        action: Action::Sell as i32,
+                        chain_id: None,
+                        seaport_address: None,
+                    };
+                    println!("Sending Sell RFQ to Maker for Option Id {:?}", option_id);
+                    sell_rfq = true;
+                    tx_rfq.send(rfq).await.unwrap();
+                } else {
+                    let owned_tokens = settlement_engine
+                        .balance_of(signer.address(), option_id)
+                        .call()
+                        .await
+                        .unwrap();
+                    assert_eq!(owned_tokens, U256::zero());
+                    println!("Sold all options back to Maker");
+                    println!("Test case successfully finished.");
                     exit(1);
                 }
-            };
-
-            // Wait until the tx has been handled by the sequencer.
-            pending_tx.await.unwrap();
-
-            if !sell_rfq {
-                let owned_tokens = settlement_engine
-                    .balance_of(signer.address(), option_id)
-                    .call()
-                    .await
-                    .unwrap();
-                assert_eq!(owned_tokens, U256::from(5u8));
-
-                // Now sell all the options right back
-                // Sell Order
-                let rfq = QuoteRequest {
-                    ulid: None,
-                    taker_address: Some(settings.wallet.address().into()),
-                    item_type: ItemType::Erc1155 as i32,
-                    token_address: Some(settlement_engine.address().into()),
-                    identifier_or_criteria: Some(option_id.into()),
-                    amount: Some(U256::from(5u8).into()),
-                    action: Action::Sell as i32,
-                    chain_id: None,
-                    seaport_address: None,
-                };
-                println!("Sending Sell RFQ to Maker for Option Id {:?}", option_id);
-                sell_rfq = true;
-                tx_rfq.send(rfq).await.unwrap();
-            } else {
-                let owned_tokens = settlement_engine
-                    .balance_of(signer.address(), option_id)
-                    .call()
-                    .await
-                    .unwrap();
-                assert_eq!(owned_tokens, U256::zero());
-                println!("Sold all options back to Maker");
-                println!("Test case successfully finished.");
-                exit(1);
             }
-        } else {
-            panic!("Error while reading from the servers request stream! This should be impossible for this example case.");
+            Ok(None) => {
+                panic!("Error: RFQ stream ended unexpectedly.");
+            }
+            Err(error) => {
+                panic!(
+                    "Error while reading from the servers request stream: {:?}",
+                    error
+                );
+            }
         }
     }
 }
