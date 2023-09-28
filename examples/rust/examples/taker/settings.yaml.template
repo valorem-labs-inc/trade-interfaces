@@ -4,10 +4,14 @@
 
 node_endpoint: "<NETWORK RPC URL>"
 valorem_endpoint: "https://trade.valorem.xyz/"
-settlement_contract: "0x7513F78472606625A9B505912e3C80762f6C9Efb"
+settlement_contract: "0x402A401B1944EBb5A3030F36Aa70d6b5794190c9"
 
 # Approve the Taker Arbitrum testnet tokens for spending by the settlement contract & Seaport
 approve_tokens: false
+
+# The chain_id setting determines which chain to use. By default, the setting is configured for the Arbitrum Goerli testnet
+# To switch to the Arbitrum Mainnet, change the value to 42161
+chain_id: 421613
 
 # Keystore is an optional setting. If not given a private key will need to be provided on startup
 #keystore: "/path/to/keystore.ks"

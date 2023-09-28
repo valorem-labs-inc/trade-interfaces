@@ -18,6 +18,7 @@ struct InnerSettings {
     ca_root: Option<String>,
     domain_name: Option<String>,
     approve_tokens: bool,
+    chain_id: u64,
 }
 
 pub struct Settings {
@@ -27,6 +28,7 @@ pub struct Settings {
     pub wallet: LocalWallet,
     pub tls_config: ClientTlsConfig,
     pub approve_tokens: bool,
+    pub chain_id: u64,
 }
 
 impl Settings {
@@ -67,6 +69,7 @@ impl Settings {
             wallet,
             tls_config,
             approve_tokens: inner.approve_tokens,
+            chain_id: inner.chain_id.into(),
         }
     }
 }
