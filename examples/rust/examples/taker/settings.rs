@@ -69,7 +69,7 @@ impl Settings {
             wallet,
             tls_config,
             approve_tokens: inner.approve_tokens,
-            chain_id: inner.chain_id.into(),
+            chain_id: inner.chain_id,
         }
     }
 }

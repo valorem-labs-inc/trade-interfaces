@@ -207,8 +207,8 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
                         identifier_or_criteria: Some(option_id.into()),
                         amount: Some(U256::from(5u8).into()),
                         action: Action::Sell as i32,
-                        chain_id: None,
-                        seaport_address: None,
+                        chain_id: Some(U256::from(settings.chain_id).into()),
+                        seaport_address: Some(seaport_contract_address.into()),
                     };
                     println!("Sending Sell RFQ to Maker for Option Id {:?}", option_id);
                     sell_rfq = true;
