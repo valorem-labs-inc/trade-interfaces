@@ -1,8 +1,8 @@
 version: v1
 plugins:
   - plugin: es
-    opt: target=ts,import_extension=none
+    opt: target=js+dts
     out: gen/valorem/trade/v1
   - plugin: connect-es
-    opt: target=ts,import_extension=none
+    opt: target=js+dts
     out: gen/valorem/trade/v1
