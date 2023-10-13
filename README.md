@@ -552,13 +552,43 @@ service RFQ {
 }
 ```
 
-#### Fees
+#### Trading Valorem Clear Options
+
+These constraints must be followed to get a hard-quote for a Valorem Clear option via the RFQ:
+
+- The `ItemType` must be `Erc1155`
+- The `token_address` must be `0x402A401B1944EBb5A3030F36Aa70d6b5794190c9`
+- The `identifier_or_criteria` must be the `optionId` of the long options token.
+- The `amount` must not `None` and non-zero (i.e. you are looking to buy/sell options)
+- The `action` must be `Buy` or `Sell`
+- The `seaport_address` must be set to seaport 1.5 (`0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`, which is version 1.5)
+- The `chain_id` is supported (i.e. either Arbitrum One `42161`, or Arbitrum Goerli `421613`).
+- The given `optionId` is an `Option` and not a `Claim` or `None` (this is
+  determined by calling the `token_type` function on the Clear contract).
+- The given `optionId` exists (i.e., somebody has called `newOptionType` on the
+  Clear contract to create the `optionId`).
+- The maker supports the `exercise` and `underlying` tokens:
+  - Presently for Arbitrum One: USDC.e (`0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8`),
+    and WETH (`0x82aF49447D8a07e3bd95BD0d56f35241523fBab1`)
+  - For testnet: USDC (`0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458`),
+    MAGIC (`0xb795f8278458443f6C43806C020a84EB5109403c`),
+    GMX (`0x5337deF26Da2506e08e37682b0d6E50b26a704BB`),
+    WBTC (`0xf8Fe24D6Ea205dd5057aD2e5FE5e313AeFd52f2e`),
+    WETH (`0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372`),
+    and LUSD (`0x42dED0b3d65510B5d1857bF26466b3b0b9e0BbbA`).
+    * Note: The testnet tokens all have open mints *
+- The `exercise`, `underlying` amounts are not `0`
+- For a `Buy`, it is not less than 30 minutes until the `expiry` of the `optionId`, and the `optionId` is not expired.
+- USDC must be either the `underlying` or `exercise` asset.
+- A maker must have the liquidity to support the option.
+
+##### Fees
 
 Responses from the RFQ service are subject to fees.
 Fees are determined by the maker and taker `FeeStructure` from the [Fees service](#fees-service).
 The fees must be included in the offer as follows:
 
-For a long Valorem option buy (opening a position):
+For a long Valorem option buy:
 
 - Two offer items:
   - the RFQ'd option long token in the correct quantity,
@@ -567,7 +597,7 @@ For a long Valorem option buy (opening a position):
   - the USDC premium debit,
   - a taker fee/rebate in USDC (if any).
 
-For a long Valorem option sell (closing a position):
+For a long Valorem option sell:
 
 - Two offer items:
   - the USDC premium credit,
@@ -575,26 +605,6 @@ For a long Valorem option sell (closing a position):
 - Two consideration items:
   - the RFQ option long token in the correct quantity,
   - a taker fee in fee/rebate in USDC (if any).
-
-For a short Valorem option sell (opening a position):
-
-- Three offer items,
-  - >= the USDC notional value at spot as quoted from Uniswap,
-  - the USDC premium credit,
-  - the maker fee/rebate in USDC (if any).
-- Two consideration items,
-  - an unexercised short claim NFT for the RFQ'd option type in the correct quantity,
-  - a taker fee/rebate in USDC (if any).
-
-For a short Valorem option buy (closing a position):
-
-- Two offer items,
-  - an unexercised claim short NFT for the RFQ'd option type in the correct quantity,
-  - a maker fee/rebate in USDC (if any).
-- Three consideration items,
-  - >= the USDC notional value at spot as quoted from Uniswap,
-  - the USDC premium debit
-  - a taker fee/rebate in USDC (if any).
 
 #### Authentication and authorization
 
