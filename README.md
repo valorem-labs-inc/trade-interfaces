@@ -579,7 +579,7 @@ These constraints must be followed to get a hard-quote for a Valorem Clear optio
     * Note: The testnet tokens all have open mints *
 - The `exercise`, `underlying` amounts are not `0`
 - For a `Buy`, it is not less than 30 minutes until the `expiry` of the `optionId`, and the `optionId` is not expired.
-- USDC must be either the underlying or exercise asset.
+- USDC must be either the `underlying` or `exercise` asset.
 - A maker must have the liquidity to support the option.
 
 ##### Fees
