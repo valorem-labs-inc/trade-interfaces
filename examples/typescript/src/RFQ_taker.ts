@@ -1,23 +1,25 @@
-import { parseUnits } from 'viem';
+import {
+  Account,
+  createPublicClient,
+  createWalletClient,
+  http,
+  parseUnits,
+} from 'viem';
 import { arbitrumGoerli } from 'viem/chains';
 import {
-  Taker,
-  ClearinghouseContract,
-  Option,
   ERC20Contract,
-  SeaportContract,
-} from './entities/index.js';
-import { rfqClient } from './lib/grpc.js';
-import {
+  Option,
+  Taker,
+  ParsedQuoteResponse,
   SEAPORT_ADDRESS,
   USDC_ADDRESS,
   WETH_ADDRESS,
-} from './lib/constants.js';
-import {
-  ParsedQuoteResponse,
-  parseQuoteResponse,
   getTimestamps,
-} from './utils/index.js';
+  parseQuoteResponse,
+  rfqClient,
+  ValoremSDK,
+} from '@nickadamson/sdk';
+import { privateKeyToAccount } from 'viem/accounts';
 
 /**
  * Setup & Configuration
@@ -28,9 +30,24 @@ import {
 const PRIVATE_KEY =
   '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
+const publicClient = createPublicClient({
+  chain: arbitrumGoerli,
+  transport: http(),
+});
+const walletClient = createWalletClient({
+  account: privateKeyToAccount(PRIVATE_KEY),
+  chain: arbitrumGoerli,
+  transport: http(),
+});
+
+const valoremSDK = new ValoremSDK({
+  publicClient,
+  walletClient,
+});
+
 // create a Taker instance (essentially a wallet/account/signer, with some utility methods)
 const taker = new Taker({
-  privateKey: PRIVATE_KEY,
+  account: valoremSDK.account!,
   chain: arbitrumGoerli,
 });
 
@@ -41,8 +58,8 @@ const clients = {
 };
 
 // create contract instances
-const clearinghouse = new ClearinghouseContract(clients);
-const seaport = new SeaportContract(clients);
+const clearinghouse = valoremSDK.clearinghouse;
+const seaport = valoremSDK.seaport;
 const usdc = new ERC20Contract({
   ...clients,
   address: USDC_ADDRESS,
