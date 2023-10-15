@@ -57,7 +57,7 @@ async fn main() -> Result<(), anyhow::Error> {
             warn!("Re/starting maker");
             run(
                 Arc::new(Provider::<Http>::try_from(settings.node_endpoint.clone())?),
-                Settings::load(&args[0]),
+                settings.clone(),
             )
             .await
         };
@@ -76,7 +76,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 Arc::new(Provider::<Ws>::new(
                     Ws::connect(settings.node_endpoint.clone()).await?,
                 )),
-                Settings::load(&args[0]),
+                settings.clone(),
             )
             .await
         };
@@ -93,7 +93,7 @@ async fn main() -> Result<(), anyhow::Error> {
             warn!("Re/starting maker");
             run(
                 Arc::new(Provider::connect_ipc(settings.node_endpoint.clone()).await?),
-                Settings::load(&args[0]),
+                settings.clone(),
             )
             .await
         };
@@ -638,6 +638,10 @@ async fn setup<P: JsonRpcClient + 'static>(
         Channel::builder(valorem_uri.clone())
             .tls_config(tls_config.clone())
             .unwrap()
+            .http2_keep_alive_interval(Duration::new(75, 0))
+            .keep_alive_timeout(Duration::new(10, 0))
+            .timeout(Duration::from_secs(10))
+            .connect_timeout(Duration::from_secs(10))
             .connect()
             .await
             .unwrap(),
@@ -663,6 +667,10 @@ async fn setup<P: JsonRpcClient + 'static>(
         Channel::builder(valorem_uri)
             .tls_config(tls_config)
             .unwrap()
+            .http2_keep_alive_interval(Duration::new(75, 0))
+            .keep_alive_timeout(Duration::new(10, 0))
+            .timeout(Duration::from_secs(10))
+            .connect_timeout(Duration::from_secs(10))
             .connect()
             .await
             .unwrap(),

@@ -8,7 +8,7 @@ use std::io::{stdout, Write};
 use std::str::FromStr;
 use tonic::transport::{Certificate, ClientTlsConfig};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone, Debug)]
 struct InnerSettings {
     node_endpoint: String,
     valorem_endpoint: String,
@@ -25,6 +25,7 @@ struct InnerSettings {
     gmx_address: String,
 }
 
+#[derive(Clone, Debug)]
 pub struct Settings {
     pub node_endpoint: String,
     pub valorem_endpoint: Uri,
