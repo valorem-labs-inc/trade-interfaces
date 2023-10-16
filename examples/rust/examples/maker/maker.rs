@@ -10,20 +10,21 @@ use ethers::prelude::{
 use ethers::utils::keccak256;
 use http::Uri;
 use siwe::{TimeStamp, Version};
-use std::ops::Mul;
-use std::{env, process::exit, sync::Arc};
+use std::time::Duration;
+use std::{env, ops::Mul, process::exit, sync::Arc};
 use time::OffsetDateTime;
 use tokio::sync::mpsc;
 use tonic::transport::{Channel, ClientTlsConfig};
 use tracing::{error, info, warn};
-use valorem_trade_interfaces::bindings;
-use valorem_trade_interfaces::grpc_codegen;
-use valorem_trade_interfaces::grpc_codegen::{auth_client::AuthClient, Empty, VerifyText};
-use valorem_trade_interfaces::grpc_codegen::{
-    rfq_client::RfqClient, Action, ConsiderationItem, EthSignature, ItemType, OfferItem, Order,
-    OrderType, QuoteRequest, QuoteResponse, SignedOrder, H256,
-};
 use valorem_trade_interfaces::utils::session_interceptor::SessionInterceptor;
+use valorem_trade_interfaces::{
+    bindings, grpc_codegen,
+    grpc_codegen::{
+        auth_client::AuthClient, rfq_client::RfqClient, Action, ConsiderationItem, Empty,
+        EthSignature, ItemType, OfferItem, Order, OrderType, QuoteRequest, QuoteResponse,
+        SignedOrder, VerifyText, H256,
+    },
+};
 
 mod settings;
 mod tracing_utils;
@@ -56,7 +57,7 @@ async fn main() -> Result<(), anyhow::Error> {
             warn!("Re/starting maker");
             run(
                 Arc::new(Provider::<Http>::try_from(settings.node_endpoint.clone())?),
-                Settings::load(&args[0]),
+                settings.clone(),
             )
             .await
         };
@@ -75,7 +76,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 Arc::new(Provider::<Ws>::new(
                     Ws::connect(settings.node_endpoint.clone()).await?,
                 )),
-                Settings::load(&args[0]),
+                settings.clone(),
             )
             .await
         };
@@ -92,7 +93,7 @@ async fn main() -> Result<(), anyhow::Error> {
             warn!("Re/starting maker");
             run(
                 Arc::new(Provider::connect_ipc(settings.node_endpoint.clone()).await?),
-                Settings::load(&args[0]),
+                settings.clone(),
             )
             .await
         };
@@ -124,12 +125,13 @@ async fn run<P: JsonRpcClient + 'static>(
     // Now there is a valid authenticated session, connect to the RFQ stream
     let mut client = RfqClient::with_interceptor(
         Channel::builder(settings.valorem_endpoint.clone())
-            .tls_config(settings.tls_config.clone())
-            .unwrap()
-            .http2_keep_alive_interval(std::time::Duration::from_secs(75))
+            .tls_config(settings.tls_config.clone())?
+            .http2_keep_alive_interval(Duration::new(75, 0))
+            .keep_alive_timeout(Duration::new(10, 0))
+            .timeout(Duration::from_secs(10))
+            .connect_timeout(Duration::from_secs(10))
             .connect()
-            .await
-            .unwrap(),
+            .await?,
         SessionInterceptor { session_cookie },
     );
 
@@ -171,18 +173,99 @@ async fn run<P: JsonRpcClient + 'static>(
 
         // Now we have received the RFQ request stream - loop until it ends.
         while let Ok(Some(quote)) = quote_stream.message().await {
-            let quote_offer = handle_rfq_request(
-                quote,
-                &settlement_engine,
-                &signer,
-                &seaport,
-                settings.usdc_address,
-            )
-            .await;
+            // Check the chain-id is valid
+            if quote.chain_id.is_none() {
+                warn!(
+                    "Invalid RFQ request was received. No chain-id was given, ignoring the request"
+                );
+                continue;
+            }
 
-            tx_quote_response.send(quote_offer).await.unwrap();
+            let chain_id: U256 = quote.chain_id.clone().unwrap().into();
+            if chain_id != U256::from(421613_u64) {
+                warn!("RFQ request was not on the testnet chain. Ignoring the request");
+                continue;
+            }
+
+            let quote_offer = if validate_rfq(seaport_contract_address, quote.clone()).is_none() {
+                // Malformed RFQ return a no-quote
+                create_no_offer(&quote, &signer)
+            } else {
+                handle_rfq_request(
+                    quote,
+                    &settlement_engine,
+                    &signer,
+                    &seaport,
+                    settings.usdc_address,
+                )
+                .await
+            };
+
+            tx_quote_response.send(quote_offer).await?;
         }
     }
+}
+
+/// Validate the received RFQ is not malformed and supported.
+fn validate_rfq(seaport_address: Address, rfq: QuoteRequest) -> Option<QuoteRequest> {
+    // We always expect Valorem to set a ulid therefore if we don't see one, return a no offer.
+    if rfq.ulid.is_none() {
+        warn!("Received a RFQ without a ULID set. ULID was None.");
+        return None;
+    }
+
+    // Taker address is completely optional.
+
+    // Item Type needs to be valid and can only be ERC1155 for Valorem (for now)
+    let item_type = ItemType::from_i32(rfq.item_type).unwrap_or(ItemType::Native);
+    if item_type != ItemType::Erc1155 {
+        warn!("Received a RFQ with an invalid ItemType. ItemType was not Erc1155.");
+        return None;
+    }
+
+    // Since this is an RFQ there should always be a token_address (settlement contract) and
+    // an identifier_or_criteria set.
+    if rfq.token_address.is_none() {
+        warn!("Received a RFQ with invalid token information. The token_address was None.");
+        return None;
+    }
+
+    if rfq.identifier_or_criteria.is_none() {
+        warn!("Received a RFQ with invalid token information. Identifier or Criteria was None.");
+        return None;
+    }
+
+    // Amount needs to be non-zero
+    if rfq.amount.is_none() {
+        warn!("Received a RFQ with an invalid amount. Amount was None.");
+        return None;
+    } else {
+        let amount: U256 = rfq.amount.clone().unwrap().into();
+        if amount.is_zero() {
+            warn!("Received a RFQ with an invalid amount. Amount was Zero.");
+            return None;
+        }
+    }
+
+    // Action needs to be valid
+    let action: Action = rfq.action.into();
+    if action == Action::Invalid {
+        warn!("Received a RFQ with an invalid action. The Action was mapped to Invalid.");
+        return None;
+    }
+
+    // Check the seaport address is against the one we support.
+    if let Some(rfq_seaport_address) = rfq.seaport_address.clone() {
+        if seaport_address != rfq_seaport_address.into() {
+            warn!("Received an RFQ against a non-supported seaport address.");
+            return None;
+        }
+    } else {
+        warn!("Did not receive a seaport address in the RFQ.");
+        return None;
+    }
+
+    Some(rfq)
 }
 
 async fn handle_rfq_request<P: JsonRpcClient + 'static>(
@@ -536,8 +619,8 @@ fn create_no_offer<P: JsonRpcClient + 'static>(
         ulid: request_for_quote.ulid.clone(),
         maker_address: Some(grpc_codegen::H160::from(signer.address())),
         order: None,
-        chain_id: None,
-        seaport_address: None,
+        chain_id: request_for_quote.chain_id.clone(),
+        seaport_address: request_for_quote.seaport_address.clone(),
     }
 }
 
@@ -553,6 +636,10 @@ async fn setup<P: JsonRpcClient + 'static>(
         Channel::builder(valorem_uri.clone())
             .tls_config(tls_config.clone())
             .unwrap()
+            .http2_keep_alive_interval(Duration::new(75, 0))
+            .keep_alive_timeout(Duration::new(10, 0))
+            .timeout(Duration::from_secs(10))
+            .connect_timeout(Duration::from_secs(10))
             .connect()
             .await
             .unwrap(),
@@ -578,6 +665,10 @@ async fn setup<P: JsonRpcClient + 'static>(
         Channel::builder(valorem_uri)
             .tls_config(tls_config)
             .unwrap()
+            .http2_keep_alive_interval(Duration::new(75, 0))
+            .keep_alive_timeout(Duration::new(10, 0))
+            .timeout(Duration::from_secs(10))
+            .connect_timeout(Duration::from_secs(10))
             .connect()
             .await
             .unwrap(),

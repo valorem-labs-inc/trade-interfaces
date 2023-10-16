@@ -436,17 +436,17 @@ async fn setup_option<P: JsonRpcClient + 'static>(
     contract: &bindings::valorem_clear::SettlementEngine<Provider<P>>,
     signer: &SignerMiddleware<Arc<Provider<P>>, LocalWallet>,
 ) -> U256 {
-    // MAGIC on Arbitrum testnet
-    let underlying_asset = "0xb795f8278458443f6C43806C020a84EB5109403c"
+    // WETH on Arbitrum testnet
+    let underlying_asset = "0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372"
         .parse::<Address>()
         .unwrap();
-    let underlying_amount = U256::from_dec_str("5000000000000000000").unwrap().as_u128();
+    let underlying_amount = U256::from_dec_str("1000000000000000000").unwrap().as_u128();
 
-    // GMX on Arbitrum testnet
+    // USDC on Arbitrum testnet
     let exercise_asset = "0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458"
         .parse::<Address>()
         .unwrap();
-    let exercise_amount = U256::from_dec_str("10000000").unwrap().as_u128();
+    let exercise_amount = U256::from_dec_str("1550000000").unwrap().as_u128();
 
     // Create the option
     let block_number = signer.provider().get_block_number().await.unwrap();
