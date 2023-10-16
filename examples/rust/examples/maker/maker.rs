@@ -125,15 +125,13 @@ async fn run<P: JsonRpcClient + 'static>(
     // Now there is a valid authenticated session, connect to the RFQ stream
     let mut client = RfqClient::with_interceptor(
         Channel::builder(settings.valorem_endpoint.clone())
-            .tls_config(settings.tls_config.clone())
-            .unwrap()
+            .tls_config(settings.tls_config.clone())?
             .http2_keep_alive_interval(Duration::new(75, 0))
             .keep_alive_timeout(Duration::new(10, 0))
             .timeout(Duration::from_secs(10))
             .connect_timeout(Duration::from_secs(10))
             .connect()
-            .await
-            .unwrap(),
+            .await?,
         SessionInterceptor { session_cookie },
     );
 
@@ -203,7 +201,7 @@ async fn run<P: JsonRpcClient + 'static>(
                 .await
             };
 
-            tx_quote_response.send(quote_offer).await.unwrap();
+            tx_quote_response.send(quote_offer).await?;
         }
     }
 }
