@@ -201,7 +201,7 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
                 // Malformed RFQ return a no-quote
                 create_no_offer(&quote, &signer)
             } else {
-                handle_rfq_request(quote, &settlement_engine, &signer, &seaport, settings.usdc_address).await
+                handle_rfq_request(quote, &settlement_engine, &signer, &seaport, settings.usdc_address).await?
             };
 
             tx_quote_response.send(quote_offer).await.ok()?;
@@ -277,7 +277,7 @@ async fn handle_rfq_request<P: JsonRpcClient + 'static>(
     signer: &SignerMiddleware<Arc<Provider<P>>, LocalWallet>,
     seaport: &bindings::seaport::Seaport<Provider<P>>,
     usdc_address: Address,
-) -> QuoteResponse {
+) -> Option<QuoteResponse> {
     // Return an offer with an hardcoded price in USDC.
     let fee = 10;
 
@@ -298,7 +298,7 @@ async fn handle_rfq_request<P: JsonRpcClient + 'static>(
                 None => {
                     // This signals an error, so we write no offer instead.
                     let no_offer = create_no_offer(&request_for_quote, signer);
-                    return no_offer;
+                    return Some(no_offer);
                 }
             };
 
@@ -351,21 +351,13 @@ async fn handle_rfq_request<P: JsonRpcClient + 'static>(
         Action::Invalid => {
             info!("Received invalid action from the RFQ, returning no offer");
             let no_offer = create_no_offer(&request_for_quote, signer);
-            return no_offer;
+            return Some(no_offer);
         }
     };
 
-    // Offer is only valid for 30 minutes (based from the block timestamp)
-    let block_number = signer.provider().get_block_number().await.unwrap();
-    let block_timestamp = signer
-        .provider()
-        .get_block(block_number)
-        .await
-        .unwrap()
-        .unwrap()
-        .timestamp;
-    let now: H256 = block_timestamp.into();
-    let now_plus_30_minutes: H256 = (block_timestamp + U256::from(1200u64)).into();
+    // Offer is only valid for 30 minutes
+    let now: H256 = U256::from(time_now()).into();
+    let now_plus_30_minutes: H256 = (U256::from(time_now()) + U256::from(1200u64)).into();
 
     // Reference https://docs.opensea.io/reference/seaport-overview
     //           https://docs.opensea.io/reference/create-an-offer
@@ -388,21 +380,21 @@ async fn handle_rfq_request<P: JsonRpcClient + 'static>(
         salt: Some(U256::from(thread_rng().gen::<u128>()).into()),
     };
 
-    let signed_order = sign_order(signer, parameters, seaport).await;
-    QuoteResponse {
+    let signed_order = sign_order(signer, parameters, seaport).await?;
+    Some(QuoteResponse {
         ulid: request_for_quote.ulid,
         maker_address: Some(grpc_codegen::H160::from(signer.address())),
         order: Some(signed_order),
         chain_id: Some(grpc_codegen::H256::from(signer.provider().get_chainid().await.unwrap())),
         seaport_address: Some(grpc_codegen::H160::from(seaport.address())),
-    }
+    })
 }
 
 async fn sign_order<P: JsonRpcClient + 'static>(
     signer: &SignerMiddleware<Arc<Provider<P>>, LocalWallet>,
     order_parameters: Order,
     seaport: &bindings::seaport::Seaport<Provider<P>>,
-) -> SignedOrder {
+) -> Option<SignedOrder> {
     // As we are going to be returning an Order, we clone the order parameters here, so we can
     // then use them in the order and avoid the `as_ref` and `clone` calls throughout the
     // transformation code (this has no performance impact, just reads a little better).
@@ -454,7 +446,7 @@ async fn sign_order<P: JsonRpcClient + 'static>(
         _ => conduit_key.fill(0),
     }
 
-    let counter = seaport.get_counter(signer.address()).await.unwrap();
+    let counter = seaport.get_counter(signer.address()).await.ok()?;
 
     let order_components = bindings::seaport::OrderComponents {
         offerer: Address::from(order_parameters.offerer.unwrap()),
@@ -473,8 +465,8 @@ async fn sign_order<P: JsonRpcClient + 'static>(
     // Construct the required signature, this was taken from the Seaport tests:
     // https://github.com/ProjectOpenSea/seaport/blob/main/test/foundry/utils/BaseConsiderationTest.sol#L208
     let mut encoded_message = Vec::<u8>::new();
-    let order_hash = seaport.get_order_hash(order_components).call().await.unwrap();
-    let (_, domain_separator, _) = seaport.information().call().await.unwrap();
+    let order_hash = seaport.get_order_hash(order_components).call().await.ok()?;
+    let (_, domain_separator, _) = seaport.information().call().await.ok()?;
 
     // bytes2(0x1901)
     for byte in &[25u8, 1u8] {
@@ -501,10 +493,10 @@ async fn sign_order<P: JsonRpcClient + 'static>(
         s: signature.s.encode(),
     };
 
-    SignedOrder {
+    Some(SignedOrder {
         parameters: Some(order_parameters_copy),
         signature: Some(eth_signature),
-    }
+    })
 }
 
 // This function will call "write" on the SettlementEngine contract for the Option Type
@@ -513,7 +505,7 @@ async fn write_option<P: JsonRpcClient + 'static>(
     request_for_quote: &QuoteRequest,
     settlement_engine: &bindings::valorem_clear::SettlementEngine<Provider<P>>,
     signer: &SignerMiddleware<Arc<Provider<P>>, LocalWallet>,
-) -> std::option::Option<(U256, U256)> {
+) -> Option<(U256, U256)> {
     let option_type: U256 = request_for_quote
         .identifier_or_criteria
         .as_ref()
