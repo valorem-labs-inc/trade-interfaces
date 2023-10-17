@@ -1,33 +1,35 @@
 use crate::settings::Settings;
-use crate::tracing_utils::{get_subscriber, init_subscriber};
-use backon::{ExponentialBuilder, Retryable};
 use ethers::abi::{AbiEncode, RawLog};
 use ethers::prelude::{
     rand::{thread_rng, Rng},
-    Address, EthLogDecode, Http, JsonRpcClient, LocalWallet, Middleware, Provider, Signer,
-    SignerMiddleware, Ws, U256,
+    Address, EthLogDecode, Http, Ipc, JsonRpcClient, LocalWallet, Middleware, Provider, Signer, SignerMiddleware, Ws,
+    U256,
 };
 use ethers::utils::keccak256;
 use http::Uri;
+use log::{error, info, warn};
 use siwe::{TimeStamp, Version};
-use std::time::Duration;
-use std::{env, ops::Mul, process::exit, sync::Arc};
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::{env, ops::Mul, process::exit, sync::Arc, time::Duration};
 use time::OffsetDateTime;
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, time::sleep};
 use tonic::transport::{Channel, ClientTlsConfig};
-use tracing::{error, info, warn};
 use valorem_trade_interfaces::utils::session_interceptor::SessionInterceptor;
 use valorem_trade_interfaces::{
     bindings, grpc_codegen,
     grpc_codegen::{
-        auth_client::AuthClient, rfq_client::RfqClient, Action, ConsiderationItem, Empty,
-        EthSignature, ItemType, OfferItem, Order, OrderType, QuoteRequest, QuoteResponse,
-        SignedOrder, VerifyText, H256,
+        auth_client::AuthClient, rfq_client::RfqClient, Action, ConsiderationItem, Empty, EthSignature, ItemType,
+        OfferItem, Order, OrderType, QuoteRequest, QuoteResponse, SignedOrder, VerifyText, H256,
     },
 };
 
 mod settings;
-mod tracing_utils;
+
+enum EthersProvider {
+    HttpProvider(Provider<Http>),
+    WsProvider(Provider<Ws>),
+    IpcProvider(Provider<Ipc>),
+}
 
 const SESSION_COOKIE_KEY: &str = "set-cookie";
 
@@ -38,11 +40,14 @@ const TOS_ACCEPTANCE: &str = "I accept the Valorem Terms of Service at https://a
 /// The Market Maker will receive Request For Quote (RFQ) from the Valorem server formatted as
 /// `QuoteRequest` and the MM needs to respond with `QuoteResponse`.
 #[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
-    let subscriber = get_subscriber("trade-api-maker".into(), "info".into(), std::io::stdout);
-    init_subscriber(subscriber);
+async fn main() {
+    // If no logging options are given, by default set global logging to warn and the maker to info.
+    let value = env::var("RUST_LOG").unwrap_or(String::from("warn,maker=info"));
+    env::set_var("RUST_LOG", value);
 
-    // TODO(DRY)
+    // Initialise a coloured timed logger
+    pretty_env_logger::init_timed();
+
     let args: Vec<String> = env::args().skip(1).collect();
     if args.len() != 1 {
         eprintln!("Unexpected command line arguments. Received {:?}", args);
@@ -52,103 +57,111 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let settings = Settings::load(&args[0]);
 
-    if settings.node_endpoint.starts_with("http") {
-        let op = || async {
-            warn!("Re/starting maker");
-            run(
-                Arc::new(Provider::<Http>::try_from(settings.node_endpoint.clone())?),
-                settings.clone(),
-            )
-            .await
-        };
+    loop {
+        let provider = connect_to_node_provider(settings.node_endpoint.clone()).await;
 
-        op.retry(
-            &ExponentialBuilder::default()
-                .with_jitter()
-                .with_max_times(10),
-        )
-        .await?;
-    } else if settings.node_endpoint.starts_with("ws") {
-        // Websockets (ws & wss)
-        let op = || async {
-            warn!("Re/starting maker");
-            run(
-                Arc::new(Provider::<Ws>::new(
-                    Ws::connect(settings.node_endpoint.clone()).await?,
-                )),
-                settings.clone(),
-            )
-            .await
-        };
+        match provider {
+            EthersProvider::HttpProvider(provider) => {
+                run(Arc::new(provider), settings.clone()).await;
+            }
+            EthersProvider::WsProvider(provider) => {
+                run(Arc::new(provider), settings.clone()).await;
+            }
+            EthersProvider::IpcProvider(provider) => {
+                run(Arc::new(provider), settings.clone()).await;
+            }
+        }
 
-        op.retry(
-            &ExponentialBuilder::default()
-                .with_jitter()
-                .with_max_times(10),
-        )
-        .await?;
-    } else {
-        // IPC
-        let op = || async {
-            warn!("Re/starting maker");
-            run(
-                Arc::new(Provider::connect_ipc(settings.node_endpoint.clone()).await?),
-                settings.clone(),
-            )
-            .await
-        };
-
-        op.retry(
-            &ExponentialBuilder::default()
-                .with_jitter()
-                .with_max_times(10),
-        )
-        .await?;
+        // We never expect the run function above to end, however it can primarily due to the connection to
+        // Valorem being closed. Sleep for a set period of time in case there are other issues at play
+        // (i.e. Valorem down) before retrying to connect.
+        warn!("Reconnection Event: Returned from the main run function, reconnecting to Valorem");
+        sleep(Duration::from_secs(10)).await;
     }
+}
 
-    Ok(())
+// Helper function to connect to a node provider.
+async fn connect_to_node_provider(node_endpoint: String) -> EthersProvider {
+    if node_endpoint.starts_with("http") {
+        let provider = match Provider::<Http>::try_from(node_endpoint) {
+            Ok(connection) => {
+                // Decrease the ethers polling time from the default of 7 seconds to 1 second.
+                connection.interval(Duration::from_secs(1))
+            }
+            Err(connection_error) => {
+                // If we cannot connect to our provider, we are in trouble. Panic out instead of
+                // trying to implement reconnection logic as most of the time the node will be local.
+                panic!("HTTP connection error: {connection_error:?}")
+            }
+        };
+
+        EthersProvider::HttpProvider(provider)
+    } else if node_endpoint.starts_with("ws") {
+        let provider = match Ws::connect(node_endpoint).await {
+            Ok(connection) => {
+                // Decrease the ethers polling time from the default of 7 seconds to 1 second.
+                Provider::<Ws>::new(connection).interval(Duration::from_secs(1))
+            }
+            Err(connection_error) => {
+                // If we cannot connect to our provider, we are in trouble. Panic out instead of
+                // trying to implement reconnection logic as most of the time the node will be local.
+                panic!("Websocket connection error: {connection_error:?}")
+            }
+        };
+
+        EthersProvider::WsProvider(provider)
+    } else {
+        let provider = match Provider::connect_ipc(node_endpoint).await {
+            Ok(connection) => {
+                // Decrease the ethers polling time from the default of 7 seconds to 1 second.
+                connection.interval(Duration::from_secs(1))
+            }
+            Err(connection_error) => {
+                // If we cannot connect to our local provider, we are in trouble just panic out instead.
+                panic!("IPC connection error: {connection_error:?}")
+            }
+        };
+
+        EthersProvider::IpcProvider(provider)
+    }
 }
 
 // Main execution function. This is not expected to return.
-async fn run<P: JsonRpcClient + 'static>(
-    provider: Arc<Provider<P>>,
-    settings: Settings,
-) -> Result<(), anyhow::Error> {
+async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: Settings) -> Option<()> {
     let session_cookie = setup(
         settings.valorem_endpoint.clone(),
         settings.wallet.clone(),
         settings.tls_config.clone(),
         &provider,
     )
-    .await;
+    .await?;
 
     // Now there is a valid authenticated session, connect to the RFQ stream
     let mut client = RfqClient::with_interceptor(
         Channel::builder(settings.valorem_endpoint.clone())
-            .tls_config(settings.tls_config.clone())?
+            .tls_config(settings.tls_config.clone())
+            .ok()?
             .http2_keep_alive_interval(Duration::new(75, 0))
             .keep_alive_timeout(Duration::new(10, 0))
             .timeout(Duration::from_secs(10))
             .connect_timeout(Duration::from_secs(10))
             .connect()
-            .await?,
+            .await
+            .ok()?,
         SessionInterceptor { session_cookie },
     );
 
     // Setup a signer so we can send transactions
-    let settlement_engine = bindings::valorem_clear::SettlementEngine::new(
-        settings.settlement_contract,
-        Arc::clone(&provider),
-    );
-    let signer =
-        SignerMiddleware::new_with_provider_chain(Arc::clone(&provider), settings.wallet.clone())
-            .await
-            .unwrap();
+    let settlement_engine =
+        bindings::valorem_clear::SettlementEngine::new(settings.settlement_contract, Arc::clone(&provider));
+    let signer = SignerMiddleware::new_with_provider_chain(Arc::clone(&provider), settings.wallet.clone())
+        .await
+        .ok()?;
 
     // Seaport 1.5 contract address
-    let seaport_contract_address = "0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC"
-        .parse::<Address>()
-        .unwrap();
+    // Note: We allow the unchecked unwrap here, since this address will always parse correctly.
+    let seaport_contract_address = "0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC".parse::<Address>().unwrap();
+
     let seaport = bindings::seaport::Seaport::new(seaport_contract_address, Arc::clone(&provider));
 
     // Approve the tokens the example will be using
@@ -159,25 +172,22 @@ async fn run<P: JsonRpcClient + 'static>(
     // The gRPC stream might end for a couple of reasons, for example:
     // * There are no clients connected after a RFQ
     // * Infrastructure middle men (like Cloudflare) has killed the connection.
-    info!("Ready for RFQs from Takers");
     loop {
         // Setup the stream between us and Valorem which the gRPC connection will use.
         let (tx_quote_response, rx_quote_response) = mpsc::channel::<QuoteResponse>(64);
         let mut quote_stream = client
-            .maker(tokio_stream::wrappers::ReceiverStream::new(
-                rx_quote_response,
-            ))
+            .maker(tokio_stream::wrappers::ReceiverStream::new(rx_quote_response))
             .await
-            .unwrap()
+            .ok()?
             .into_inner();
+
+        info!("Ready for RFQs from Takers");
 
         // Now we have received the RFQ request stream - loop until it ends.
         while let Ok(Some(quote)) = quote_stream.message().await {
             // Check the chain-id is valid
             if quote.chain_id.is_none() {
-                warn!(
-                    "Invalid RFQ request was received. No chain-id was given, ignoring the request"
-                );
+                warn!("Invalid RFQ request was received. No chain-id was given, ignoring the request");
                 continue;
             }
 
@@ -191,17 +201,10 @@ async fn run<P: JsonRpcClient + 'static>(
                 // Malformed RFQ return a no-quote
                 create_no_offer(&quote, &signer)
             } else {
-                handle_rfq_request(
-                    quote,
-                    &settlement_engine,
-                    &signer,
-                    &seaport,
-                    settings.usdc_address,
-                )
-                .await
+                handle_rfq_request(quote, &settlement_engine, &signer, &seaport, settings.usdc_address).await
             };
 
-            tx_quote_response.send(quote_offer).await?;
+            tx_quote_response.send(quote_offer).await.ok()?;
         }
     }
 }
@@ -290,15 +293,14 @@ async fn handle_rfq_request<P: JsonRpcClient + 'static>(
                 "Handling Buy Order for Option Type {:?}",
                 U256::from(request_for_quote.identifier_or_criteria.clone().unwrap())
             );
-            let (option_id, _claim_id) =
-                match write_option(&request_for_quote, settlement_engine, signer).await {
-                    Some((option_id, claim_id)) => (option_id, claim_id),
-                    None => {
-                        // This signals an error, so we write no offer instead.
-                        let no_offer = create_no_offer(&request_for_quote, signer);
-                        return no_offer;
-                    }
-                };
+            let (option_id, _claim_id) = match write_option(&request_for_quote, settlement_engine, signer).await {
+                Some((option_id, claim_id)) => (option_id, claim_id),
+                None => {
+                    // This signals an error, so we write no offer instead.
+                    let no_offer = create_no_offer(&request_for_quote, signer);
+                    return no_offer;
+                }
+            };
 
             // Option we are offering
             let option = OfferItem {
@@ -391,9 +393,7 @@ async fn handle_rfq_request<P: JsonRpcClient + 'static>(
         ulid: request_for_quote.ulid,
         maker_address: Some(grpc_codegen::H160::from(signer.address())),
         order: Some(signed_order),
-        chain_id: Some(grpc_codegen::H256::from(
-            signer.provider().get_chainid().await.unwrap(),
-        )),
+        chain_id: Some(grpc_codegen::H256::from(signer.provider().get_chainid().await.unwrap())),
         seaport_address: Some(grpc_codegen::H160::from(seaport.address())),
     }
 }
@@ -416,9 +416,7 @@ async fn sign_order<P: JsonRpcClient + 'static>(
         offer.push(bindings::seaport::OfferItem {
             item_type: offer_item.item_type as u8,
             token: Address::from(offer_item.token.unwrap_or_default()),
-            identifier_or_criteria: U256::from(
-                offer_item.identifier_or_criteria.unwrap_or_default(),
-            ),
+            identifier_or_criteria: U256::from(offer_item.identifier_or_criteria.unwrap_or_default()),
             start_amount: U256::from(offer_item.start_amount.unwrap_or_default()),
             end_amount: U256::from(offer_item.end_amount.unwrap_or_default()),
         });
@@ -429,11 +427,7 @@ async fn sign_order<P: JsonRpcClient + 'static>(
         consideration.push(bindings::seaport::ConsiderationItem {
             item_type: consideration_item.item_type as u8,
             token: Address::from(consideration_item.token.unwrap_or_default()),
-            identifier_or_criteria: U256::from(
-                consideration_item
-                    .identifier_or_criteria
-                    .unwrap_or_default(),
-            ),
+            identifier_or_criteria: U256::from(consideration_item.identifier_or_criteria.unwrap_or_default()),
             start_amount: U256::from(consideration_item.start_amount.unwrap_or_default()),
             end_amount: U256::from(consideration_item.end_amount.unwrap_or_default()),
             recipient: Address::from(consideration_item.recipient.unwrap_or_default()),
@@ -479,11 +473,7 @@ async fn sign_order<P: JsonRpcClient + 'static>(
     // Construct the required signature, this was taken from the Seaport tests:
     // https://github.com/ProjectOpenSea/seaport/blob/main/test/foundry/utils/BaseConsiderationTest.sol#L208
     let mut encoded_message = Vec::<u8>::new();
-    let order_hash = seaport
-        .get_order_hash(order_components)
-        .call()
-        .await
-        .unwrap();
+    let order_hash = seaport.get_order_hash(order_components).call().await.unwrap();
     let (_, domain_separator, _) = seaport.information().call().await.unwrap();
 
     // bytes2(0x1901)
@@ -500,10 +490,7 @@ async fn sign_order<P: JsonRpcClient + 'static>(
     }
 
     let hash = keccak256(encoded_message.as_slice());
-    let signature = signer
-        .signer()
-        .sign_hash(ethers::types::H256::from(hash))
-        .unwrap();
+    let signature = signer.signer().sign_hash(ethers::types::H256::from(hash)).unwrap();
 
     // We don't want to directly encode v, as this will be encoded as a u64 where leading
     // zeros matter (so it will be included). We know its only 1 byte, therefore only push 1 byte
@@ -580,16 +567,14 @@ async fn write_option<P: JsonRpcClient + 'static>(
         let topics = log_entry.topics.clone();
         let data = log_entry.data.to_vec();
 
-        let event = if let Ok(log) =
-            bindings::valorem_clear::SettlementEngineEvents::decode_log(&RawLog { topics, data })
-        {
-            log
-        } else {
-            continue;
-        };
+        let event =
+            if let Ok(log) = bindings::valorem_clear::SettlementEngineEvents::decode_log(&RawLog { topics, data }) {
+                log
+            } else {
+                continue;
+            };
 
-        if let bindings::valorem_clear::SettlementEngineEvents::OptionsWrittenFilter(event) = event
-        {
+        if let bindings::valorem_clear::SettlementEngineEvents::OptionsWrittenFilter(event) = event {
             info!(
                 "Successfully written {:?} options. Option Id {:?}. Claim Id {:?}.",
                 event.amount, event.option_id, event.claim_id
@@ -630,33 +615,43 @@ async fn setup<P: JsonRpcClient + 'static>(
     wallet: LocalWallet,
     tls_config: ClientTlsConfig,
     provider: &Arc<Provider<P>>,
-) -> String {
+) -> Option<String> {
     // Connect and authenticate with Valorem
     let mut client: AuthClient<Channel> = AuthClient::new(
         Channel::builder(valorem_uri.clone())
             .tls_config(tls_config.clone())
-            .unwrap()
+            .ok()?
             .http2_keep_alive_interval(Duration::new(75, 0))
             .keep_alive_timeout(Duration::new(10, 0))
             .timeout(Duration::from_secs(10))
             .connect_timeout(Duration::from_secs(10))
             .connect()
             .await
-            .unwrap(),
+            .ok()?,
     );
-    let response = client
-        .nonce(Empty::default())
-        .await
-        .expect("Unable to fetch Nonce");
+
+    let response = match client.nonce(Empty::default()).await {
+        Ok(response) => response,
+        Err(_) => {
+            error!("Unable to fetch Nonce from endpoint");
+            return None;
+        }
+    };
 
     // Fetch the session cookie for all future requests
-    let session_cookie = response
-        .metadata()
-        .get(SESSION_COOKIE_KEY)
-        .expect("Session cookie was not returned in Nonce response")
-        .to_str()
-        .expect("Unable to fetch session cookie from Nonce response")
-        .to_string();
+    let session_cookie = match response.metadata().get(SESSION_COOKIE_KEY) {
+        Some(session_cookie_raw) => match session_cookie_raw.to_str() {
+            Ok(session_cookie) => session_cookie.to_string(),
+            Err(_) => {
+                error!("Unable to fetch session cookie from Nonce response");
+                return None;
+            }
+        },
+        None => {
+            error!("Session cookie was not returned in Nonce response");
+            return None;
+        }
+    };
 
     let nonce = response.into_inner().nonce;
 
@@ -664,14 +659,14 @@ async fn setup<P: JsonRpcClient + 'static>(
     let mut client = AuthClient::with_interceptor(
         Channel::builder(valorem_uri)
             .tls_config(tls_config)
-            .unwrap()
+            .ok()?
             .http2_keep_alive_interval(Duration::new(75, 0))
             .keep_alive_timeout(Duration::new(10, 0))
             .timeout(Duration::from_secs(10))
             .connect_timeout(Duration::from_secs(10))
             .connect()
             .await
-            .unwrap(),
+            .ok()?,
         SessionInterceptor {
             session_cookie: session_cookie.clone(),
         },
@@ -695,22 +690,13 @@ async fn setup<P: JsonRpcClient + 'static>(
 
     // Generate a signature
     let message_string = message.to_string();
-    let signature = wallet
-        .sign_message(message_string.as_bytes())
-        .await
-        .unwrap();
+    let signature = wallet.sign_message(message_string.as_bytes()).await.unwrap();
 
     // Create the SignedMessage
     let signature_string = signature.to_string();
     let mut signed_message = serde_json::Map::new();
-    signed_message.insert(
-        "signature".to_string(),
-        serde_json::Value::from(signature_string),
-    );
-    signed_message.insert(
-        "message".to_string(),
-        serde_json::Value::from(message_string),
-    );
+    signed_message.insert("signature".to_string(), serde_json::Value::from(signature_string));
+    signed_message.insert("message".to_string(), serde_json::Value::from(message_string));
     let body = serde_json::Value::from(signed_message).to_string();
 
     let response = client.verify(VerifyText { body }).await;
@@ -718,7 +704,7 @@ async fn setup<P: JsonRpcClient + 'static>(
         Ok(_) => (),
         Err(error) => {
             error!("Unable to verify client. Reported error:\n{error:?}");
-            exit(2);
+            return None;
         }
     }
 
@@ -728,12 +714,12 @@ async fn setup<P: JsonRpcClient + 'static>(
         Ok(_) => (),
         Err(error) => {
             error!("Unable to check authentication with Valorem. Reported error:\n{error:?}");
-            exit(3);
+            return None;
         }
     }
 
     info!("Maker has authenticated with Valorem");
-    session_cookie
+    Some(session_cookie)
 }
 
 async fn approve_tokens<P: JsonRpcClient + 'static>(
@@ -745,25 +731,16 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
 ) {
     // Note: This approval logic is tied to what the example Taker is doing and may need to
     //       to be updated for your example
-
     // Take gas estimation out of the equation which can be dicey on the Arbitrum testnet.
-    // todo - this is true for now, in the future we should check the chain id
     let gas = U256::from(500000u64);
     let gas_price = U256::from(200).mul(U256::exp10(8usize));
 
     // Approval for the Seaport contract
     let erc20_contract = bindings::erc20::Erc20::new(settings.magic_address, Arc::clone(provider));
-    let mut approval_tx = erc20_contract
-        .approve(seaport_contract.address(), U256::MAX)
-        .tx;
+    let mut approval_tx = erc20_contract.approve(seaport_contract.address(), U256::MAX).tx;
     approval_tx.set_gas(gas);
     approval_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approval_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
+    signer.send_transaction(approval_tx, None).await.unwrap().await.unwrap();
     info!(
         "Approved Seaport ({:?}) to spend MAGIC ({:?})",
         seaport_contract.address(),
@@ -776,12 +753,7 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
         .tx;
     approval_tx.set_gas(gas);
     approval_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approval_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
+    signer.send_transaction(approval_tx, None).await.unwrap().await.unwrap();
     info!(
         "Pre-approved Seaport {:?} to move option tokens",
         seaport_contract.address()
@@ -789,87 +761,56 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
 
     // Token approval for the Valorem SettlementEngine
     let erc20_contract = bindings::erc20::Erc20::new(settings.usdc_address, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settings.settlement_contract, U256::MAX)
-        .tx;
+    let mut approve_tx = erc20_contract.approve(settings.settlement_contract, U256::MAX).tx;
     approve_tx.set_gas(gas);
     approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
+    signer.send_transaction(approve_tx, None).await.unwrap().await.unwrap();
     info!(
         "Approved Settlement Engine ({:?}) to spend USDC ({:?})",
         settings.settlement_contract, settings.usdc_address
     );
 
     let erc20_contract = bindings::erc20::Erc20::new(settings.weth_address, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settings.settlement_contract, U256::MAX)
-        .tx;
+    let mut approve_tx = erc20_contract.approve(settings.settlement_contract, U256::MAX).tx;
     approve_tx.set_gas(gas);
     approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
+    signer.send_transaction(approve_tx, None).await.unwrap().await.unwrap();
     info!(
         "Approved Settlement Engine ({:?}) to spend WETH ({:?})",
         settings.settlement_contract, settings.weth_address
     );
 
     let erc20_contract = bindings::erc20::Erc20::new(settings.wbtc_address, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settings.settlement_contract, U256::MAX)
-        .tx;
+    let mut approve_tx = erc20_contract.approve(settings.settlement_contract, U256::MAX).tx;
     approve_tx.set_gas(gas);
     approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
+    signer.send_transaction(approve_tx, None).await.unwrap().await.unwrap();
     info!(
         "Approved Settlement Engine ({:?}) to spend WBTC ({:?})",
         settings.settlement_contract, settings.wbtc_address
     );
 
     let erc20_contract = bindings::erc20::Erc20::new(settings.gmx_address, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settings.settlement_contract, U256::MAX)
-        .tx;
+    let mut approve_tx = erc20_contract.approve(settings.settlement_contract, U256::MAX).tx;
     approve_tx.set_gas(gas);
     approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
+    signer.send_transaction(approve_tx, None).await.unwrap().await.unwrap();
     info!(
         "Approved Settlement Engine ({:?}) to spend GMX ({:?})",
         settings.settlement_contract, settings.gmx_address
     );
 
     let erc20_contract = bindings::erc20::Erc20::new(settings.magic_address, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settings.settlement_contract, U256::MAX)
-        .tx;
+    let mut approve_tx = erc20_contract.approve(settings.settlement_contract, U256::MAX).tx;
     approve_tx.set_gas(gas);
     approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
+    signer.send_transaction(approve_tx, None).await.unwrap().await.unwrap();
     info!(
         "Approved Settlement Engine ({:?}) to spend MAGIC ({:?})",
         settings.settlement_contract, settings.magic_address
     );
+}
+
+pub fn time_now() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
 }

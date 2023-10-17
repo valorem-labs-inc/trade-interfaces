@@ -33,10 +33,7 @@ pub struct Settings {
 
 impl Settings {
     pub fn load(file: &str) -> Self {
-        let settings = Config::builder()
-            .add_source(File::with_name(file))
-            .build()
-            .unwrap();
+        let settings = Config::builder().add_source(File::with_name(file)).build().unwrap();
 
         let inner: InnerSettings = settings.try_deserialize().unwrap();
 
@@ -53,14 +50,10 @@ impl Settings {
             read_to_string("/etc/ssl/cert.pem").unwrap()
         };
 
-        let domain_name = inner
-            .domain_name
-            .unwrap_or(String::from("trade.valorem.xyz"));
+        let domain_name = inner.domain_name.unwrap_or(String::from("trade.valorem.xyz"));
 
         let ca = Certificate::from_pem(pem);
-        let tls_config = ClientTlsConfig::new()
-            .ca_certificate(ca)
-            .domain_name(domain_name);
+        let tls_config = ClientTlsConfig::new().ca_certificate(ca).domain_name(domain_name);
 
         Settings {
             node_endpoint: inner.node_endpoint,

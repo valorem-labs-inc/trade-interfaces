@@ -1,8 +1,8 @@
 use crate::settings::Settings;
 use ethers::abi::{AbiEncode, RawLog};
 use ethers::prelude::{
-    Address, Bytes, EthLogDecode, Http, JsonRpcClient, LocalWallet, Middleware, Provider,
-    Signature, Signer, SignerMiddleware, Ws, U256,
+    Address, Bytes, EthLogDecode, Http, JsonRpcClient, LocalWallet, Middleware, Provider, Signature, Signer,
+    SignerMiddleware, Ws, U256,
 };
 use http::Uri;
 use siwe::{TimeStamp, Version};
@@ -88,19 +88,14 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
     );
 
     // Valorem Settlement Engine
-    let settlement_engine = bindings::valorem_clear::SettlementEngine::new(
-        settings.settlement_contract,
-        Arc::clone(&provider),
-    );
-    let signer =
-        SignerMiddleware::new_with_provider_chain(Arc::clone(&provider), settings.wallet.clone())
-            .await
-            .unwrap();
+    let settlement_engine =
+        bindings::valorem_clear::SettlementEngine::new(settings.settlement_contract, Arc::clone(&provider));
+    let signer = SignerMiddleware::new_with_provider_chain(Arc::clone(&provider), settings.wallet.clone())
+        .await
+        .unwrap();
 
     // Seaport address
-    let seaport_contract_address = "0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC"
-        .parse::<Address>()
-        .unwrap();
+    let seaport_contract_address = "0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC".parse::<Address>().unwrap();
     let seaport = bindings::seaport::Seaport::new(seaport_contract_address, Arc::clone(&provider));
 
     // Approve the tokens the example will be using on Arbitrum Testnet
@@ -161,12 +156,7 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
                 let offer_parameters = offered_order.parameters.clone().unwrap();
                 println!(
                     "Received offer from Maker. {:?} ({:?}) for {:?} options",
-                    U256::from(
-                        offer_parameters.consideration[0]
-                            .start_amount
-                            .clone()
-                            .unwrap()
-                    ),
+                    U256::from(offer_parameters.consideration[0].start_amount.clone().unwrap()),
                     Address::from(offer_parameters.consideration[0].token.clone().unwrap()),
                     U256::from(offer_parameters.offer[0].start_amount.clone().unwrap()),
                 );
@@ -229,10 +219,7 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
                 panic!("Error: RFQ stream ended unexpectedly.");
             }
             Err(error) => {
-                panic!(
-                    "Error while reading from the servers request stream: {:?}",
-                    error
-                );
+                panic!("Error while reading from the servers request stream: {:?}", error);
             }
         }
     }
@@ -255,9 +242,7 @@ fn transform_to_seaport_order(
         offer.push(bindings::seaport::OfferItem {
             item_type: offer_item.item_type as u8,
             token: Address::from(offer_item.token.unwrap()),
-            identifier_or_criteria: U256::from(
-                offer_item.identifier_or_criteria.unwrap_or_default(),
-            ),
+            identifier_or_criteria: U256::from(offer_item.identifier_or_criteria.unwrap_or_default()),
             start_amount: U256::from(offer_item.start_amount.unwrap()),
             end_amount: U256::from(offer_item.end_amount.unwrap()),
         })
@@ -268,11 +253,7 @@ fn transform_to_seaport_order(
         consideration.push(bindings::seaport::ConsiderationItem {
             item_type: consideration_item.item_type as u8,
             token: Address::from(consideration_item.token.unwrap_or_default()),
-            identifier_or_criteria: U256::from(
-                consideration_item
-                    .identifier_or_criteria
-                    .unwrap_or_default(),
-            ),
+            identifier_or_criteria: U256::from(consideration_item.identifier_or_criteria.unwrap_or_default()),
             start_amount: U256::from(consideration_item.start_amount.unwrap()),
             end_amount: U256::from(consideration_item.end_amount.unwrap()),
             recipient: Address::from(consideration_item.recipient.unwrap()),
@@ -337,10 +318,7 @@ async fn setup_valorem_connection<P: JsonRpcClient + 'static>(
             .await
             .unwrap(),
     );
-    let response = client
-        .nonce(Empty::default())
-        .await
-        .expect("Unable to fetch Nonce");
+    let response = client.nonce(Empty::default()).await.expect("Unable to fetch Nonce");
 
     // Fetch the session cookie for all future requests
     let session_cookie = response
@@ -384,22 +362,13 @@ async fn setup_valorem_connection<P: JsonRpcClient + 'static>(
 
     // Generate a signature
     let message_string = message.to_string();
-    let signature = wallet
-        .sign_message(message_string.as_bytes())
-        .await
-        .unwrap();
+    let signature = wallet.sign_message(message_string.as_bytes()).await.unwrap();
 
     // Create the SignedMessage
     let signature_string = signature.to_string();
     let mut signed_message = serde_json::Map::new();
-    signed_message.insert(
-        "signature".to_string(),
-        serde_json::Value::from(signature_string),
-    );
-    signed_message.insert(
-        "message".to_string(),
-        serde_json::Value::from(message_string),
-    );
+    signed_message.insert("signature".to_string(), serde_json::Value::from(signature_string));
+    signed_message.insert("message".to_string(), serde_json::Value::from(message_string));
     let body = serde_json::Value::from(signed_message).to_string();
 
     let response = client.verify(VerifyText { body }).await;
@@ -416,9 +385,7 @@ async fn setup_valorem_connection<P: JsonRpcClient + 'static>(
     match response {
         Ok(_) => (),
         Err(error) => {
-            eprintln!(
-                "Error: Unable to check authentication with Valorem. Reported error:\n{error:?}"
-            );
+            eprintln!("Error: Unable to check authentication with Valorem. Reported error:\n{error:?}");
             exit(1);
         }
     }
@@ -437,15 +404,11 @@ async fn setup_option<P: JsonRpcClient + 'static>(
     signer: &SignerMiddleware<Arc<Provider<P>>, LocalWallet>,
 ) -> U256 {
     // WETH on Arbitrum testnet
-    let underlying_asset = "0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372"
-        .parse::<Address>()
-        .unwrap();
+    let underlying_asset = "0x618b9a2Db0CF23Bb20A849dAa2963c72770C1372".parse::<Address>().unwrap();
     let underlying_amount = U256::from_dec_str("1000000000000000000").unwrap().as_u128();
 
     // USDC on Arbitrum testnet
-    let exercise_asset = "0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458"
-        .parse::<Address>()
-        .unwrap();
+    let exercise_asset = "0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458".parse::<Address>().unwrap();
     let exercise_amount = U256::from_dec_str("1550000000").unwrap().as_u128();
 
     // Create the option
@@ -499,15 +462,10 @@ async fn setup_option<P: JsonRpcClient + 'static>(
     for log_entry in transaction_receipt.logs {
         let topics = log_entry.topics.clone();
         let data = log_entry.data.to_vec();
-        let event =
-            bindings::valorem_clear::SettlementEngineEvents::decode_log(&RawLog { topics, data })
-                .unwrap();
+        let event = bindings::valorem_clear::SettlementEngineEvents::decode_log(&RawLog { topics, data }).unwrap();
 
         if let bindings::valorem_clear::SettlementEngineEvents::NewOptionTypeFilter(event) = event {
-            println!(
-                "Option Id successfully created. Option Id {:?}",
-                event.option_id
-            );
+            println!("Option Id successfully created. Option Id {:?}", event.option_id);
             return event.option_id;
         }
     }
@@ -528,21 +486,12 @@ async fn approve_test_tokens<P: JsonRpcClient + 'static>(
     let gas_price = U256::from(2000).mul(U256::exp10(8usize));
 
     // Approval for the Seaport contract
-    let magic = "0xb795f8278458443f6C43806C020a84EB5109403c"
-        .parse::<Address>()
-        .unwrap();
+    let magic = "0xb795f8278458443f6C43806C020a84EB5109403c".parse::<Address>().unwrap();
     let erc20_contract = bindings::erc20::Erc20::new(magic, Arc::clone(provider));
-    let mut approval_tx = erc20_contract
-        .approve(seaport_contract.address(), U256::MAX)
-        .tx;
+    let mut approval_tx = erc20_contract.approve(seaport_contract.address(), U256::MAX).tx;
     approval_tx.set_gas(gas);
     approval_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approval_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
+    signer.send_transaction(approval_tx, None).await.unwrap().await.unwrap();
     println!(
         "Approved Seaport ({:?}) to spend MAGIC ({:?})",
         seaport_contract.address(),
@@ -555,117 +504,67 @@ async fn approve_test_tokens<P: JsonRpcClient + 'static>(
         .tx;
     approval_tx.set_gas(gas);
     approval_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approval_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
+    signer.send_transaction(approval_tx, None).await.unwrap().await.unwrap();
     println!(
         "Pre-approved Seaport {:?} to move option tokens",
         seaport_contract.address()
     );
 
     // Token approval for the Valorem SettlementEngine
-    let usdc = "0x8FB1E3fC51F3b789dED7557E680551d93Ea9d892"
-        .parse::<Address>()
-        .unwrap();
+    let usdc = "0x8FB1E3fC51F3b789dED7557E680551d93Ea9d892".parse::<Address>().unwrap();
     let erc20_contract = bindings::erc20::Erc20::new(usdc, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settlement_contract.address(), U256::MAX)
-        .tx;
+    let mut approve_tx = erc20_contract.approve(settlement_contract.address(), U256::MAX).tx;
     approve_tx.set_gas(gas);
     approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
+    signer.send_transaction(approve_tx, None).await.unwrap().await.unwrap();
     println!(
         "Approved Settlement Engine ({:?}) to spend USDC ({:?})",
         settlement_contract.address(),
         usdc
     );
 
-    let weth = "0xe39Ab88f8A4777030A534146A9Ca3B52bd5D43A3"
-        .parse::<Address>()
-        .unwrap();
+    let weth = "0xe39Ab88f8A4777030A534146A9Ca3B52bd5D43A3".parse::<Address>().unwrap();
     let erc20_contract = bindings::erc20::Erc20::new(weth, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settlement_contract.address(), U256::MAX)
-        .tx;
+    let mut approve_tx = erc20_contract.approve(settlement_contract.address(), U256::MAX).tx;
     approve_tx.set_gas(gas);
     approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
+    signer.send_transaction(approve_tx, None).await.unwrap().await.unwrap();
     println!(
         "Approved Settlement Engine ({:?}) to spend WETH ({:?})",
         settlement_contract.address(),
         weth
     );
 
-    let wbtc = "0xf8Fe24D6Ea205dd5057aD2e5FE5e313AeFd52f2e"
-        .parse::<Address>()
-        .unwrap();
+    let wbtc = "0xf8Fe24D6Ea205dd5057aD2e5FE5e313AeFd52f2e".parse::<Address>().unwrap();
     let erc20_contract = bindings::erc20::Erc20::new(wbtc, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settlement_contract.address(), U256::MAX)
-        .tx;
+    let mut approve_tx = erc20_contract.approve(settlement_contract.address(), U256::MAX).tx;
     approve_tx.set_gas(gas);
     approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
+    signer.send_transaction(approve_tx, None).await.unwrap().await.unwrap();
     println!(
         "Approved Settlement Engine ({:?}) to spend WBTC ({:?})",
         settlement_contract.address(),
         wbtc
     );
 
-    let gmx = "0x5337deF26Da2506e08e37682b0d6E50b26a704BB"
-        .parse::<Address>()
-        .unwrap();
+    let gmx = "0x5337deF26Da2506e08e37682b0d6E50b26a704BB".parse::<Address>().unwrap();
     let erc20_contract = bindings::erc20::Erc20::new(gmx, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settlement_contract.address(), U256::MAX)
-        .tx;
+    let mut approve_tx = erc20_contract.approve(settlement_contract.address(), U256::MAX).tx;
     approve_tx.set_gas(gas);
     approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
+    signer.send_transaction(approve_tx, None).await.unwrap().await.unwrap();
     println!(
         "Approved Settlement Engine ({:?}) to spend GMX ({:?})",
         settlement_contract.address(),
         gmx
     );
 
-    let magic = "0xb795f8278458443f6C43806C020a84EB5109403c"
-        .parse::<Address>()
-        .unwrap();
+    let magic = "0xb795f8278458443f6C43806C020a84EB5109403c".parse::<Address>().unwrap();
     let erc20_contract = bindings::erc20::Erc20::new(magic, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settlement_contract.address(), U256::MAX)
-        .tx;
+    let mut approve_tx = erc20_contract.approve(settlement_contract.address(), U256::MAX).tx;
     approve_tx.set_gas(gas);
     approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
+    signer.send_transaction(approve_tx, None).await.unwrap().await.unwrap();
     println!(
         "Approved Settlement Engine ({:?}) to spend MAGIC ({:?})",
         settlement_contract.address(),
