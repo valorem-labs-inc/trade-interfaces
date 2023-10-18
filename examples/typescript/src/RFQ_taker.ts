@@ -14,7 +14,7 @@ import {
   ValoremSDK,
   OptionType,
   get24HrTimestamps,
-} from '@nickadamson/sdk';
+} from '@valorem-labs-inc/sdk';
 
 /**
  * Setup & Configuration
