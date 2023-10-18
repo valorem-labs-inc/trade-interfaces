@@ -1,4 +1,10 @@
-import { createPublicClient, createWalletClient, http, parseUnits } from 'viem';
+import {
+  Address,
+  createPublicClient,
+  createWalletClient,
+  http,
+  parseUnits,
+} from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { arbitrumGoerli } from 'viem/chains';
 import {
@@ -36,13 +42,14 @@ const valoremSDK = new ValoremSDK({
 });
 
 // get the WebTaker instance (essentially a wallet/account/signer, with some utility methods)
-const webTaker = valoremSDK.getWebTaker();
+const webTaker = valoremSDK.webTaker;
 
 // Our mock tokens on Arbitrum Goerli
-const USDC_ADDRESS = '0x8ae0eeedd35dbefe460df12a20823efde9e03458';
-const WETH_ADDRESS = '0x618b9a2db0cf23bb20a849daa2963c72770c1372';
+const USDC_ADDRESS: Address = '0x8ae0eeedd35dbefe460df12a20823efde9e03458';
+const WETH_ADDRESS: Address = '0x618b9a2db0cf23bb20a849daa2963c72770c1372';
 
-// create contract instances
+// contract instances
+const clearinghouse = valoremSDK.clearinghouse;
 const usdc = new ERC20Contract({
   address: USDC_ADDRESS,
   publicClient,
@@ -74,23 +81,19 @@ async function createOptionType() {
   const exerciseAmount = 1575n; // 1575 USDC, divided by 1e6
   const { exerciseTimestamp, expiryTimestamp } = get24HrTimestamps();
 
-  const optionType = new OptionType({
-    optionInfo: {
-      underlyingAsset,
-      underlyingAmount,
-      exerciseAsset,
-      exerciseAmount,
-      exerciseTimestamp,
-      expiryTimestamp,
-    },
-    publicClient,
-  });
+  const optionInfo = {
+    underlyingAsset,
+    underlyingAmount,
+    exerciseAsset,
+    exerciseAmount,
+    exerciseTimestamp,
+    expiryTimestamp,
+  };
 
-  // wait for optionType to initialize
-  while (!optionType.ready) {
-    console.log('Waiting for option type to initialize...');
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
+  const optionType = await OptionType.fromInfo({
+    optionInfo,
+    clearinghouse,
+  });
 
   // check if option type already exists
   if (!optionType.typeExists) {
@@ -140,7 +143,7 @@ async function sendRfqRequests(optionId: bigint) {
   };
 
   // continuously send requests and handle responses
-  await webTaker.sendRfqRequests({
+  await webTaker.sendRFQ({
     quoteRequest,
     onQuoteResponse,
     signal: abortController.signal,
@@ -174,7 +177,7 @@ async function checkBalanceAndAllowance(
   });
   if (!hasEnoughAllowance) {
     await webTaker.approveERC20({
-      erc20: usdc,
+      tokenAddress: usdc.address,
       spender: SEAPORT_ADDRESS,
       amount: usdcPremium,
     });
