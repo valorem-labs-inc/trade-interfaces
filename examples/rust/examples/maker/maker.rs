@@ -50,8 +50,8 @@ async fn main() {
 
     let args: Vec<String> = env::args().skip(1).collect();
     if args.len() != 1 {
-        eprintln!("Unexpected command line arguments. Received {:?}", args);
-        eprintln!("Usage: maker <settings_file>");
+        error!("Unexpected command line arguments. Received {:?}", args);
+        error!("Usage: maker <settings_file>");
         exit(1);
     }
 
