@@ -1,26 +1,31 @@
 {
   "compilerOptions": {
-    "target": "es6",
+    "target": "esnext",
+    "lib": ["esnext"],
     "allowJs": true,
     "checkJs": true,
     "skipLibCheck": true,
+    "strict": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
     "esModuleInterop": true,
-    "module": "commonjs",
+    "module": "esnext",
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
     "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": false,
     "baseUrl": ".",
-    "paths": {
-    },
-    "types": ["node"],
+    "types": ["node"]
   },
-  "include": [
-    "src",
-  ],
+  "ts-node": {
+    "transpileOnly": true,
+    "files": true,
+    "experimentalResolver": true,
+    "esm": true
+  },
+  "include": ["src"],
   "exclude": ["node_modules", "gen"]
 }
