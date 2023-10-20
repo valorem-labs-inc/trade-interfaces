@@ -24,7 +24,9 @@ impl Interceptor for SessionInterceptor {
             let cookie_value = AsciiMetadataValue::try_from(&self.session_cookie).unwrap();
 
             // Insert the session cookie.
-            request.metadata_mut().insert(COOKIE_HEADER_KEY, cookie_value);
+            request
+                .metadata_mut()
+                .insert(COOKIE_HEADER_KEY, cookie_value);
             request
         } else {
             request
