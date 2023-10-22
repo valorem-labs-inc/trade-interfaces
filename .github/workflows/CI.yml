@@ -1,0 +1,36 @@
+name: 'Parallel Test Suite'
+
+on:
+  push:
+    branches:
+      - main
+      - 'v**'
+      - 'releases/v**'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+      - 'v**'
+      - 'releases/v**'
+
+jobs:
+  examples:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: true
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@master
+        with:
+          submodules: true
+
+      # Start docker stack here to allow migrations time to run before the end-to-end tests start
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $ --password-stdin
+
+      # Start these here so migrations have time to run while we check formatting and clippy
+      - name: Init docker dev stack (anvil, redis, db, trade API, indexer)
+        run: |
+          docker-compose -f docker-compose.yml up -d
+
+      # Add examples here
