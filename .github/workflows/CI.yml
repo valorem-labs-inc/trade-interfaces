@@ -16,8 +16,6 @@ on:
 jobs:
   examples:
     runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: true
     steps:
       - name: Checkout repo
         uses: actions/checkout@master
@@ -33,4 +31,25 @@ jobs:
         run: |
           docker-compose -f docker-compose.yml up -d
 
-      # Add examples here
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          override: true
+          profile: minimal
+          components: clippy, rustfmt
+
+      # Check formatting, clippy, and run examples test
+      - name: Check Formatting
+        run: cargo fmt --all -- --check
+        working-directory: examples/rust
+
+      - name: Check With Clippy
+        run: cargo clippy --all --all-targets --all-features -- -D warnings
+        working-directory: examples/rust
+
+      - name: Generate code coverage
+        run: cargo test
+        working-directory: examples/rust
+        env:
+          APP_RPC__URI: http://127.0.0.1:8545
