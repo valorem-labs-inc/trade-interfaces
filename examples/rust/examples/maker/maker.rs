@@ -141,29 +141,35 @@ async fn run<P: JsonRpcClient + 'static>(
     .await?;
 
     // Now there is a valid authenticated session, connect to the RFQ stream
-    let mut client = RfqClient::with_interceptor(
-        Channel::builder(settings.valorem_endpoint.clone())
-            .tls_config(settings.tls_config.clone())
-            .ok()?
-            .http2_keep_alive_interval(Duration::new(75, 0))
-            .keep_alive_timeout(Duration::new(10, 0))
-            .timeout(Duration::from_secs(10))
-            .connect_timeout(Duration::from_secs(10))
-            .connect()
-            .await
-            .ok()?,
-        SessionInterceptor { session_cookie },
-    );
+    let channel_builder = connect_to_valorem(
+        settings.valorem_endpoint.clone(),
+        settings.tls_config.clone(),
+    )
+    .await?;
+
+    let mut client =
+        RfqClient::with_interceptor(channel_builder, SessionInterceptor { session_cookie });
 
     // Setup a signer so we can send transactions
     let settlement_engine = bindings::valorem_clear::SettlementEngine::new(
         settings.settlement_contract,
         Arc::clone(&provider),
     );
-    let signer =
-        SignerMiddleware::new_with_provider_chain(Arc::clone(&provider), settings.wallet.clone())
-            .await
-            .ok()?;
+
+    // We do an unchecked unwrap since if an error is returned it was due to not being able to get the chain_id
+    // from the provider.
+    let signer = match SignerMiddleware::new_with_provider_chain(
+        Arc::clone(&provider),
+        settings.wallet.clone(),
+    )
+    .await
+    {
+        Ok(signer) => signer,
+        Err(error) => {
+            warn!("Error while attempting to create signer. Internally Ethers-rs will query the chain_id. Reported error {error:?}");
+            return None;
+        }
+    };
 
     // Seaport 1.5 contract address
     // Note: We allow the unchecked unwrap here, since this address will always parse correctly.
@@ -184,13 +190,21 @@ async fn run<P: JsonRpcClient + 'static>(
     loop {
         // Setup the stream between us and Valorem which the gRPC connection will use.
         let (tx_quote_response, rx_quote_response) = mpsc::channel::<QuoteResponse>(64);
-        let mut quote_stream = client
+
+        let maker_stream = match client
             .maker(tokio_stream::wrappers::ReceiverStream::new(
                 rx_quote_response,
             ))
             .await
-            .ok()?
-            .into_inner();
+        {
+            Ok(maker_stream) => maker_stream,
+            Err(error) => {
+                warn!("Unable to create the Maker stream. Reported error {error:?}");
+                return None;
+            }
+        };
+
+        let mut quote_stream = maker_stream.into_inner();
 
         info!("Ready for RFQs from Takers");
 
@@ -224,7 +238,10 @@ async fn run<P: JsonRpcClient + 'static>(
                 .await?
             };
 
-            tx_quote_response.send(quote_offer).await.ok()?;
+            if tx_quote_response.send(quote_offer).await.is_err() {
+                warn!("Received error while attempting to send offer back on Maker channel. Reconnecting.");
+                return None;
+            }
         }
     }
 }
@@ -402,13 +419,13 @@ async fn handle_rfq_request<P: JsonRpcClient + 'static>(
     };
 
     let signed_order = sign_order(signer, parameters, seaport).await?;
+    let chain_id = fetch_chain_id(&signer.provider()).await?;
+
     Some(QuoteResponse {
         ulid: request_for_quote.ulid,
         maker_address: Some(grpc_codegen::H160::from(signer.address())),
         order: Some(signed_order),
-        chain_id: Some(grpc_codegen::H256::from(
-            signer.provider().get_chainid().await.unwrap(),
-        )),
+        chain_id: Some(grpc_codegen::H256::from(chain_id)),
         seaport_address: Some(grpc_codegen::H160::from(seaport.address())),
     })
 }
@@ -475,7 +492,13 @@ async fn sign_order<P: JsonRpcClient + 'static>(
         _ => conduit_key.fill(0),
     }
 
-    let counter = seaport.get_counter(signer.address()).await.ok()?;
+    let counter = match seaport.get_counter(signer.address()).await {
+        Ok(counter) => counter,
+        Err(error) => {
+            warn!("Unable to get the on-chain counter from Seaport. Reported error {error:?}");
+            return None;
+        }
+    };
 
     let order_components = bindings::seaport::OrderComponents {
         offerer: Address::from(order_parameters.offerer.unwrap()),
@@ -494,8 +517,20 @@ async fn sign_order<P: JsonRpcClient + 'static>(
     // Construct the required signature, this was taken from the Seaport tests:
     // https://github.com/ProjectOpenSea/seaport/blob/main/test/foundry/utils/BaseConsiderationTest.sol#L208
     let mut encoded_message = Vec::<u8>::new();
-    let order_hash = seaport.get_order_hash(order_components).call().await.ok()?;
-    let (_, domain_separator, _) = seaport.information().call().await.ok()?;
+    let order_hash = match seaport.get_order_hash(order_components).call().await {
+        Ok(order_hash) => order_hash,
+        Err(error) => {
+            warn!("Unable to fetch the order hash for the order from the Seaport contract. Reported error: {error:?}");
+            return None;
+        }
+    };
+    let (_, domain_separator, _) = match seaport.information().call().await {
+        Ok(seaport_information) => seaport_information,
+        Err(error) => {
+            warn!("Unable to retrieve on-chain Seaport information. Reported error: {error:?}");
+            return None;
+        }
+    };
 
     // bytes2(0x1901)
     for byte in &[25u8, 1u8] {
@@ -643,18 +678,8 @@ async fn setup<P: JsonRpcClient + 'static>(
     provider: &Arc<Provider<P>>,
 ) -> Option<String> {
     // Connect and authenticate with Valorem
-    let mut client: AuthClient<Channel> = AuthClient::new(
-        Channel::builder(valorem_uri.clone())
-            .tls_config(tls_config.clone())
-            .ok()?
-            .http2_keep_alive_interval(Duration::new(75, 0))
-            .keep_alive_timeout(Duration::new(10, 0))
-            .timeout(Duration::from_secs(10))
-            .connect_timeout(Duration::from_secs(10))
-            .connect()
-            .await
-            .ok()?,
-    );
+    let channel_builder = connect_to_valorem(valorem_uri.clone(), tls_config.clone()).await?;
+    let mut client: AuthClient<Channel> = AuthClient::new(channel_builder);
 
     let response = match client.nonce(Empty::default()).await {
         Ok(response) => response,
@@ -682,21 +707,15 @@ async fn setup<P: JsonRpcClient + 'static>(
     let nonce = response.into_inner().nonce;
 
     // Verify & authenticate with Valorem before connecting to RFQ endpoint.
+    let channel_builder = connect_to_valorem(valorem_uri, tls_config).await?;
     let mut client = AuthClient::with_interceptor(
-        Channel::builder(valorem_uri)
-            .tls_config(tls_config)
-            .ok()?
-            .http2_keep_alive_interval(Duration::new(75, 0))
-            .keep_alive_timeout(Duration::new(10, 0))
-            .timeout(Duration::from_secs(10))
-            .connect_timeout(Duration::from_secs(10))
-            .connect()
-            .await
-            .ok()?,
+        channel_builder,
         SessionInterceptor {
             session_cookie: session_cookie.clone(),
         },
     );
+
+    let chain_id = fetch_chain_id(&provider).await?.as_u64();
 
     // Create a sign in with ethereum message
     let message = siwe::Message {
@@ -705,7 +724,7 @@ async fn setup<P: JsonRpcClient + 'static>(
         statement: Some(TOS_ACCEPTANCE.into()),
         uri: "http://localhost/".parse().unwrap(),
         version: Version::V1,
-        chain_id: provider.get_chainid().await.unwrap().as_u64(),
+        chain_id,
         nonce,
         issued_at: TimeStamp::from(OffsetDateTime::now_utc()),
         expiration_time: None,
@@ -893,9 +912,48 @@ async fn approve_tokens<P: JsonRpcClient + 'static>(
     );
 }
 
-pub fn time_now() -> u64 {
+fn time_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs()
+}
+
+// Helper function to fetch the chain id.
+async fn fetch_chain_id<P: JsonRpcClient + 'static>(provider: &Provider<P>) -> Option<U256> {
+    match provider.get_chainid().await {
+        Ok(chain_id) => Some(chain_id),
+        Err(error) => {
+            warn!("ChainId Fetch: Error while attempting to get the chain_id. Reported error {error:?}");
+            return None;
+        }
+    }
+}
+
+// Helper function to connect to Valorem.
+async fn connect_to_valorem(
+    valorem_uri: Uri,
+    tls_config: ClientTlsConfig,
+) -> Option<tonic::transport::Channel> {
+    let builder = match Channel::builder(valorem_uri).tls_config(tls_config) {
+        Ok(builder) => builder,
+        Err(error) => {
+            panic!("Unable to add in TLS configuration to the channel builder. Error returned {error:?}")
+        }
+    };
+
+    match builder
+        .http2_keep_alive_interval(Duration::new(75, 0))
+        .keep_alive_timeout(Duration::new(10, 0))
+        .timeout(Duration::from_secs(10))
+        .connect_timeout(Duration::from_secs(10))
+        .connect()
+        .await
+    {
+        Ok(builder) => Some(builder),
+        Err(error) => {
+            warn!("Unable to connect to Valorem endpoint. Reported error {error:?}");
+            return None;
+        }
+    }
 }
