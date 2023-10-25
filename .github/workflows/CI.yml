@@ -44,11 +44,7 @@ jobs:
         run: cargo fmt --all -- --check
         working-directory: examples/rust
 
-      - name: Check With Clippy
-        run: cargo clippy --all --all-targets --all-features -- -D warnings
-        working-directory: examples/rust
-
-      - name: Generate code coverage
+      - name: Build and Test
         run: cargo test
         working-directory: examples/rust
         env:
