@@ -1,0 +1,41 @@
+version: '3.8'
+services:
+  postgres:
+    image: ghcr.io/valorem-labs-inc/customgres:latest
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: trade
+    ports:
+      - 5432:5432
+  migrator:
+    image: ghcr.io/valorem-labs-inc/migrator:latest
+    environment:
+      DATABASE_URL: postgres://postgres:password@postgres:5432/trade
+    command: '/scripts/run_migrations.sh'
+    depends_on:
+      - postgres
+  redis:
+    image: redis:7
+    ports:
+      - 6379:6379
+  anvil:
+    image: ghcr.io/valorem-labs-inc/anvil:latest
+    ports:
+      - 8545:8545
+  tradeapi:
+    image: ghcr.io/valorem-labs-inc/trade-web-api:latest
+    environment:
+      APP_ENVIRONMENT: local
+    ports:
+      - 8080:8080
+    depends_on:
+      - postgres
+      - redis
+      - anvil
+  indexer:
+    image: ghcr.io/valorem-labs-inc/indexer:latest
+    depends_on:
+      - postgres
+      - redis
+      - anvil
