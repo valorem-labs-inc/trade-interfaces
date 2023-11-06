@@ -11,7 +11,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "../../proto/valorem/trade/v1/auth.proto",
             "../../proto/valorem/trade/v1/soft_quote.proto",
         ],
-        &["../../proto/valorem/trade/v1/"],
+        ["../../proto/valorem/trade/v1/"],
     )
     .unwrap();
 
