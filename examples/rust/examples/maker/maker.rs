@@ -294,7 +294,7 @@ async fn run<P: JsonRpcClient + 'static>(
                         }
 
                         let quote_offer = if validate_soft_quote(quote.clone()).is_none() {
-                            // Malformed RFQ return a no-quote
+                            // Malformed soft-quote return a no-quote
                             create_soft_quote_no_offer(&quote, &signer)
                         } else {
                             handle_soft_quote_request(
