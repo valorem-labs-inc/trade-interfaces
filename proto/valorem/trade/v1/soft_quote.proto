@@ -15,8 +15,8 @@ service SoftQuote {
     rpc WebTaker (QuoteRequest) returns (stream SoftQuoteResponse);
     /** Request soft quotes from makers via a stream of QuoteRequest messages and receive a stream of SoftQuoteResponse messages. */
     rpc Taker (stream QuoteRequest) returns (stream SoftQuoteResponse);
-    /** Send quotes to takers via a stream of QuoteResponse messages and receive a stream of SoftQuoteResponse messages. */
-    rpc Maker (stream QuoteResponse) returns (stream SoftQuoteResponse);
+    /** Send quotes to takers via a stream of SoftQuoteResponse messages and receive a stream of QuoteRequest messages. */
+    rpc Maker (stream SoftQuoteResponse) returns (stream QuoteRequest);
 }
 
 // The quote response message contains the quote/signed offer from the maker.
