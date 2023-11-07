@@ -797,17 +797,6 @@ These constraints must be followed to get a soft-quote for a Valorem Clear optio
 - For a `Buy`, it is not less than 30 minutes until the `expiry` of the `optionId`, and the `optionId` is not expired.
 - USDC must be either the `underlying` or `exercise` asset.
 
-
-Send quotes to takers via a stream of `SoftQuoteResponse` messages and receive a
-stream of `QuoteRequest` messages.
-
-These messages are indented to give the taker an expected price and should not be
-
-
-```protobuf
-rpc Maker (stream SoftQuoteResponse) returns (stream QuoteRequest);
-```
-
 ##### Fees
 
 The soft-quote needs to consider fees as per the `RFQ`.
