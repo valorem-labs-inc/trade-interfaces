@@ -6,35 +6,32 @@ import "rfq.proto";
 
 package valorem.trade.v1;
 
-/**
- * Soft quote services and related message formats.
- */
+// Soft quote services and related message formats.
 
 service SoftQuote {
-    /** Request soft quotes from makers via a single QuoteRequest message and receive a stream of SoftQuoteResponse messages for use by gRPC-web clients. */
+    // Request soft quotes from makers via a single QuoteRequest message and receive a stream of SoftQuoteResponse messages for use by gRPC-web clients.
     rpc WebTaker (QuoteRequest) returns (stream SoftQuoteResponse);
-    /** Request soft quotes from makers via a stream of QuoteRequest messages and receive a stream of SoftQuoteResponse messages. */
+    // Request soft quotes from makers via a stream of QuoteRequest messages and receive a stream of SoftQuoteResponse messages.
     rpc Taker (stream QuoteRequest) returns (stream SoftQuoteResponse);
-    /** Send quotes to takers via a stream of SoftQuoteResponse messages and receive a stream of QuoteRequest messages. */
+    // Send quotes to takers via a stream of SoftQuoteResponse messages and receive a stream of QuoteRequest messages.
     rpc Maker (stream SoftQuoteResponse) returns (stream QuoteRequest);
 }
 
 // The quote response message contains the quote/signed offer from the maker.
 message SoftQuoteResponse {
-    /** The unique identifier for the quote request. This is used to match the
-      * quote response to the quote request.
-     */
+    // The unique identifier for the quote request. This is used to match the
+    // quote response to the quote request.
     optional H128 ulid = 1;
 
-    /** The address of the maker making the offer. */
+    // The address of the maker making the offer.
     optional H160 maker_address = 2;
 
-    /** The order and from the maker. */
+    // The order from the maker.
     Order order = 3;
 
-    // The EIP-155 chain_id for the chain for which the offer was signed.
+    // The EIP-155 chain_id for the chain for which the quote is for.
     optional H256 chain_id = 4;
 
-    // The address of the seaport contract for which the offer was signed.
+    // The address of the seaport contract for which the quote is for.
     optional H160 seaport_address = 5;
 }
