@@ -19,7 +19,7 @@ service Auth {
   rpc Authenticate (Empty) returns (H160);
 
   /** Returns the SIWE Session for the request's sessionId */
-  rpc Session (Empty) returns (SIWESession);
+  rpc Session (Empty) returns (SiweSession);
 }
 
 /** Nonce response message containing the generated `nonce` string. */
@@ -34,7 +34,7 @@ message VerifyText {
 }
 
 /** The object representing a valid/authenticated sid */
-message SIWESession {
+message SiweSession {
   H160 address = 1;
   H256 chain_id = 2;
 }
