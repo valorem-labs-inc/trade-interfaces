@@ -20,6 +20,9 @@ service Auth {
 
   /** Returns the SIWE Session for the request's sessionId */
   rpc Session (Empty) returns (SiweSession);
+
+  /** Invalidates the session for the request's sessionId */
+  rpc SignOut (Empty) returns (Empty);
 }
 
 /** Nonce response message containing the generated `nonce` string. */
