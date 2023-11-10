@@ -39,5 +39,5 @@ message VerifyText {
 /** The object representing a valid/authenticated sid */
 message SiweSession {
   H160 address = 1;
-  H256 chain_id = 2;
+  H96 chain_id = 2;
 }
