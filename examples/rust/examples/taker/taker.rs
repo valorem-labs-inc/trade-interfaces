@@ -167,7 +167,7 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
                 }
 
                 let order = quote_response.order.unwrap();
-                let order_parameters = order.parameters.clone().unwrap();
+                let order_parameters = order.clone().unwrap();
                 println!(
                     "Received quote from Maker. {:?} ({:?}) for {:?} options",
                     U256::from(
