@@ -16,6 +16,12 @@ service Auth {
 
   // Used to check if a given connection is authenticated, returns the address which is authenticated for a nonce cookie
   rpc Authenticate (Empty) returns (H160);
+
+  // Returns the SIWE Session for the request's sessionId
+  rpc Session (Empty) returns (SiweSession);
+
+  // Invalidates the session for the request's sessionId
+  rpc SignOut (Empty) returns (Empty);
 }
 
 // Nonce response message containing the generated `nonce` string.
@@ -24,6 +30,14 @@ message NonceText {
 }
 
 // Verify request message containing an JSON encoded string of the `SignedMessage` structure (src/auth).
+// In a future major/breaking version of this API might be renamed to SignedMessage, and yes, it needs to be JSON
+//    encoded as per the spec for SIWE.
 message VerifyText {
   string body = 1;
+}
+
+// The object representing a valid/authenticated sid
+message SiweSession {
+  H160 address = 1;
+  H256 chain_id = 2;
 }

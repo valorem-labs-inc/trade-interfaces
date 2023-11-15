@@ -14,11 +14,15 @@ import {
   ValoremSDK,
   OptionType,
   get24HrTimestamps,
+  GRPC_ENDPOINT,
+  trackCookieInterceptor,
+  Auth,
+  RFQ,
 } from '@valorem-labs-inc/sdk';
+import { createPromiseClient } from '@connectrpc/connect';
+import { createGrpcTransport } from '@connectrpc/connect-node';
 
-/**
- * Setup & Configuration
- */
+/** Viem Config */
 
 // replace with your own account to use for signing
 // you will need a Valorem Access Pass
@@ -36,9 +40,25 @@ const walletClient = createWalletClient({
   transport: http(),
 });
 
+/** GRPC Config */
+const transport = createGrpcTransport({
+  baseUrl: GRPC_ENDPOINT,
+  httpVersion: '2',
+  interceptors: [trackCookieInterceptor],
+  nodeOptions: {
+    rejectUnauthorized: false,
+  },
+});
+
+const authClient = createPromiseClient(Auth, transport);
+const rfqClient = createPromiseClient(RFQ, transport);
+
+/** Init Valorem SDK with clients */
 const valoremSDK = new ValoremSDK({
   publicClient,
   walletClient,
+  authClient,
+  rfqClient,
 });
 
 // get the WebTaker instance (essentially a wallet/account/signer, with some utility methods)

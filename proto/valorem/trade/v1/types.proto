@@ -41,5 +41,5 @@ message EthSignature {
   bytes v = 3;
 }
 
-/** The empty message */
+// The empty message
 message Empty {}
