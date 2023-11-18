@@ -219,8 +219,8 @@ async fn run<P: JsonRpcClient + 'static>(
             }
 
             let chain_id: U256 = quote.chain_id.clone().unwrap().into();
-            if chain_id != U256::from(421613_u64) {
-                warn!("RFQ request was not on the testnet chain. Ignoring the request");
+            if chain_id != U256::from(421613_u64) && chain_id != U256::from(31337_u64) {
+                warn!("Chain ID: {chain_id:?} is not supported/not a testnet. Ignoring the request");
                 continue;
             }
 
