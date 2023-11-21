@@ -22,22 +22,18 @@ The public endpoint for the Valorem Trade API is `https://trade.valorem.xyz`.
 There are two principal user roles in the Valorem Trade API:
 
 - **Maker**: Makers sign offers in response to requests for quotes (RFQs).
-  They are responsible for having the requisite assets when a taker optionally 
+  They are responsible for having the requisite assets when a taker optionally
   fills their signed offer. Makers are presently required to request access to
-  the maker API via the [Valorem discord](https://discord.gg/valorem).
+  the maker API via the [Valorem discord](https://discord.gg/valorem); this will be lifted once our offer validation system has been battle tested.
 
 - **Taker**: Takers request quotes from makers and optionally
-  execute signed offers via the Seaport smart contracts. Takers are presently 
-  required to possess a [Valorem Access Pass](https://opensea.io/collection/valorem-access-pass) to access the API.
-
-These protections are in place to ensure that the API is not abused during the
-early access period.
+  execute signed offers via the Seaport smart contracts. Takers can get early access to releases of new features with a [Valorem Access Pass](https://opensea.io/collection/valorem-access-pass).
 
 ## TLS Certificate Authority
 
-The Valorem Trade API uses the GoDaddy Root TLS certificate authority (CA) to 
+The Valorem Trade API uses the GoDaddy Root TLS certificate authority (CA) to
 issue certificates; some protobuf clients may need to add this CA, which can be
-found [here](certs/trade.valorem.xyz.pem).
+found [here](https://github.com/valorem-labs-inc/trade-interfaces/blob/main/certs/trade.valorem.xyz.pem).
 
 ## ALPN
 
@@ -45,7 +41,7 @@ The Valorem Trade API supports HTTP/2 via the `h2` ALPN protocol.
 
 ## Keepalives and timeouts
 
-The Valorem Trade API sends HTTP/2 keepalives every 75 seconds and times out 
+The Valorem Trade API sends HTTP/2 keepalives every 75 seconds and times out
 after 10 seconds if a response is not received. Users of the API should use HTTP/2
 keepalives, and not issue TCP keepalives.
 
@@ -60,8 +56,8 @@ take appropriate action.
 
 ## Rate limiting
 
-Rate limits are applied to certain services and methods in the Valorem Trade API. 
-These rate limits are subject to change and are not guaranteed. Details about 
+Rate limits are applied to certain services and methods in the Valorem Trade API.
+These rate limits are subject to change and are not guaranteed. Details about
 any applied rate limits can be found on the service and method documentation.
 
 ## Primitive data types
@@ -212,7 +208,7 @@ message OfferItem {
 ```
 
 - `item_type`: Designates the type of item.
-- `token`: Designates the account of the item's token contract (with the null  
+- `token`: Designates the account of the item's token contract (with the null
   address used for Ether or other native tokens).
 - `identifier_or_criteria`: Represents either the ERC721 or ERC1155
   token identifier or, in the case of a criteria-based item type, a
@@ -278,13 +274,13 @@ message Order {
   on-chain (i.e. calling `validate`).
 - `zone`: An optional secondary account attached to the
   order with two additional privileges:
-    - The zone may cancel orders where it is named as the zone by calling
-      cancel. (Note that `offerer`s can also cancel their own orders, either
-      individually or for all orders signed with their current counter at
-      once by calling `incrementCounter`).
-    - "Restricted" orders (as specified by the `order_type`) must either be
-      executed by the zone or the `offerer`, or must be approved as indicated
-      by a call to an `validateOrder` on the `zone`.
+  - The zone may cancel orders where it is named as the zone by calling
+    cancel. (Note that `offerer`s can also cancel their own orders, either
+    individually or for all orders signed with their current counter at
+    once by calling `incrementCounter`).
+  - "Restricted" orders (as specified by the `order_type`) must either be
+    executed by the zone or the `offerer`, or must be approved as indicated
+    by a call to an `validateOrder` on the `zone`.
 - `offer`: Contains an array of items that may be transferred
   from the `offerer`'s account.
 - `consideration`: Contains an array of items that must be received
@@ -388,7 +384,7 @@ message Empty {}
 
 `0 OK`
 
-The request was successful.
+The request was successful, the response is an [EIP-4361](https://eips.ethereum.org/EIPS/eip-4361) nonce as a `string`.
 
 ```protobuf
 message NonceText {
@@ -467,6 +463,57 @@ message H160 {
 
 ```
 
+##### `Session`
+
+Returns the SIWE session information for the request's session ID. This method provides access to details of the currently authenticated session.
+
+```protobuf
+rpc Session (Empty) returns (SiweSession);
+```
+
+###### Unary request
+
+```protobuf
+message Empty {}
+```
+
+###### Unary response
+
+`0 OK`
+
+The request was successful, the response is the `SiweSession` info.
+
+```protobuf
+message SiweSession {
+  H160 address = 1;
+  H256 chain_id = 2;
+}
+```
+
+- `address` (`H160`): The Ethereum address of the authenticated user.
+- `chain_id` (`H256`): The chain ID associated with the session.
+
+
+##### `SignOut`
+
+Invalidates the current session based on the request's session ID. This method is used to end an authenticated session, effectively signing out the user.
+
+```protobuf
+rpc SignOut (Empty) returns (Empty);
+```
+
+###### Unary request
+
+```protobuf
+rpc SignOut (Empty) returns (Empty);
+```
+
+###### Unary response
+
+`0 OK`
+
+The request was successful, and the session has been invalidated.
+
 ### Fees
 
 The Fees Service in Valorem Trade API provides information about the fees which
@@ -501,6 +548,10 @@ message Empty {}
 ```
 
 ###### Unary response
+
+`0 OK`
+
+The request was successful, the response is the `FeeStructure` for the user.
 
 ```protobuf
 message FeeStructure {
