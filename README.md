@@ -24,7 +24,7 @@ There are two principal user roles in the Valorem Trade API:
 - **Maker**: Makers sign offers in response to requests for quotes (RFQs).
   They are responsible for having the requisite assets when a taker optionally
   fills their signed offer. Makers are presently required to request access to
-  the maker API via the [Valorem discord](https://discord.gg/valorem); this will be lifted once our offer validation system has been battle tested.
+  the maker API via the [Valorem discord](https://discord.gg/valorem); set to be lifted pending the battle testing of our offer validation protocol.
 
 - **Taker**: Takers request quotes from makers and optionally
   execute signed offers via the Seaport smart contracts. Takers can get early access to releases of new features with a [Valorem Access Pass](https://opensea.io/collection/valorem-access-pass).
