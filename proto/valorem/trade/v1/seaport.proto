@@ -19,7 +19,7 @@ enum ItemType {
     ERC1155_WITH_CRITERIA = 5;
 }
 
-// This is and item required in exchange for an offer.
+// This is an item required in exchange for an offer.
 message ConsiderationItem {
     ItemType item_type = 1;
     H160 token = 2;
