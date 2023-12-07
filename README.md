@@ -903,7 +903,7 @@ These constraints must be followed to get a soft-quote for a Valorem Clear optio
 
 - The `token_address` must be `0x402A401B1944EBb5A3030F36Aa70d6b5794190c9`
 - The `identifier_or_criteria` must be the `optionId` of the long options token.
-- The `amount` must not `None` and non-zero (i.e. you are looking to buy).
+- The `amount` must not `None` and non-zero (i.e. you are looking to buy/sell).
 - The `chain_id` is supported (i.e. either Arbitrum One `42161`, or Arbitrum Goerli `421613`).
 - The `action` is `Buy` or `Sell`.
 - The given `optionId` is an `Option` and not a `Claim` or `None` (this is
