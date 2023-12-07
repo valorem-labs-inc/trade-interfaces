@@ -5,39 +5,36 @@ import "seaport.proto";
 
 package valorem.trade.v1;
 
-/**
- * Request for quote (RFQ) services and related message formats.
- */
+
+// Request for quote (RFQ) services and related message formats.
 
 service RFQ {
-    /** Request quotes from makers via a single QuoteRequest message and receive a stream of QuoteResponse messages for use by gRPC-web clients. */
+    // Request quotes from makers via a single QuoteRequest message and receive a stream of QuoteResponse messages for use by gRPC-web clients.
     rpc WebTaker (QuoteRequest) returns (stream QuoteResponse);
-    /** Request quotes from makers via a stream of QuoteRequest messages and receive a stream of QuoteResponse messages. */
+    // Request quotes from makers via a stream of QuoteRequest messages and receive a stream of QuoteResponse messages.
     rpc Taker (stream QuoteRequest) returns (stream QuoteResponse);
-    /** Send quotes to takers via a stream of QuoteResponse messages and receive a stream of QuoteRequest messages. */
+    // Send quotes to takers via a stream of QuoteResponse messages and receive a stream of QuoteRequest messages.
     rpc Maker (stream QuoteResponse) returns (stream QuoteRequest);
 }
 
-/** The Action enum specifies whether the taker is requesting a quote to buy or sell an asset. */
+// The Action enum specifies whether the taker is requesting a quote to buy or sell an asset.
 enum Action {
     BUY = 0;
     SELL = 1;
     INVALID = 255;
 }
 
-/** The fields comprising the quote request message give the maker what they need to provide a quote/signed offer. */
+// The fields comprising the quote request message give the maker what they need to provide a quote/signed offer.
 message QuoteRequest {
-    /** The unique identifier for the quote request. This is used to match the
-      * quote response to the quote request.
-     */
+    // The unique identifier for the quote request. This is used to match the
+    // quote response to the quote request.
     optional H128 ulid = 1;
 
-    /** Ideally the maker would never know who the taker is, and vice-versa.
-      * However, seaport reveals the makers' address to the taker.
-      * takerAddress ensures there is no information asymmetry between
-      * the maker and taker. Thought the trader may not always end up being
-      * the taker.
-     */
+    // Ideally the maker would never know who the taker is, and vice-versa.
+    // However, seaport reveals the makers' address to the taker.
+    // takerAddress ensures there is no information asymmetry between
+    // the maker and taker. Thought the trader may not always end up being
+    // the taker.
     optional H160 taker_address = 2;
 
     ItemType item_type = 3;
@@ -45,20 +42,18 @@ message QuoteRequest {
     // The token address for which a quote is being requested.
     optional H160 token_address = 4;
 
-    /** The identifier_or_criteria represents either the ERC721 or ERC1155
-     * token identifier or, in the case of a criteria-based item type, a
-     * merkle root composed of the valid set of token identifiers for
-     * the item. This value will be ignored for Ether and ERC20 item types,
-     * and can optionally be zero for criteria-based item types to allow
-     * for any identifier.
-     */
+    // The identifier_or_criteria represents either the ERC721 or ERC1155
+    // token identifier or, in the case of a criteria-based item type, a
+    // merkle root composed of the valid set of token identifiers for
+    // the item. This value will be ignored for Ether and ERC20 item types,
+    // and can optionally be zero for criteria-based item types to allow
+    // for any identifier.
     optional H256 identifier_or_criteria = 5;
 
     H256 amount = 6;
 
-    /** A request by the Taker to the Maker, i.e. if the request is Buy the Taker wants to buy the option from the
-     * Maker, whereas Sell is the Taker wanting to sell to the Maker.
-     */
+    // A request by the Taker to the Maker, i.e. if the request is Buy the Taker wants to buy the option from the
+    // Maker, whereas Sell is the Taker wanting to sell to the Maker.
     Action action = 7;
 
     // The EIP-155 chain_id for the chain for which the quote is requested.
@@ -70,15 +65,14 @@ message QuoteRequest {
 
 // The quote response message contains the quote/signed offer from the maker.
 message QuoteResponse {
-    /** The unique identifier for the quote request. This is used to match the
-      * quote response to the quote request.
-     */
+    // The unique identifier for the quote request. This is used to match the
+    // quote response to the quote request.
     optional H128 ulid = 1;
 
-    /** The address of the maker making the offer. */
+    // The address of the maker making the offer.
     optional H160 maker_address = 2;
 
-    /** The order and signature from the maker. */
+    // The order and signature from the maker.
     SignedOrder order = 3;
 
     // The EIP-155 chain_id for the chain for which the offer was signed.

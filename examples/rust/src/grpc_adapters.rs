@@ -2,6 +2,7 @@
 // Reference: https://github.com/ledgerwatch/interfaces/blob/master/src/lib.rs
 use crate::grpc_codegen::*;
 use arrayref::array_ref;
+use ethers::abi::AbiEncode;
 
 // Macro allowing for proto types to be converted into numbers (and vice versa), moving
 // through the fixed hash type first.
@@ -94,12 +95,27 @@ impl From<EthSignature> for ethers::types::Signature {
     }
 }
 
+impl From<ethers::types::Signature> for EthSignature {
+    fn from(value: ethers::types::Signature) -> Self {
+        // We don't want to directly encode v, as this will be encoded as a u64 where leading
+        // zeros matter (so it will be included). We know its only 1 byte, therefore only push 1 byte
+        // of data so the signature remains 65 bytes on the wire.
+        Self {
+            v: vec![value.v.to_le_bytes()[0]],
+            r: value.r.encode(),
+            s: value.s.encode(),
+        }
+    }
+}
+
 impl From<i32> for Action {
     fn from(value: i32) -> Self {
-        match value {
-            0 => Action::Buy,
-            1 => Action::Sell,
-            _ => Action::Invalid,
-        }
+        Action::from_i32(value).unwrap_or(Action::Invalid)
+    }
+}
+
+impl From<i32> for ItemType {
+    fn from(value: i32) -> Self {
+        ItemType::from_i32(value).unwrap_or(ItemType::Native)
     }
 }
