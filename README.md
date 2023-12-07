@@ -905,7 +905,7 @@ These constraints must be followed to get a soft-quote for a Valorem Clear optio
 - The `identifier_or_criteria` must be the `optionId` of the long options token.
 - The `amount` must not `None` and non-zero (i.e. you are looking to buy).
 - The `chain_id` is supported (i.e. either Arbitrum One `42161`, or Arbitrum Goerli `421613`).
-- The `action` is `Buy`.
+- The `action` is `Buy` or `Sell`.
 - The given `optionId` is an `Option` and not a `Claim` or `None` (this is
   determined by calling the `token_type` function on the Clear contract).
 - The given `optionId` exists (i.e., somebody has called `newOptionType` on the
