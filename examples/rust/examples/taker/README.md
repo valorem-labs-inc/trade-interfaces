@@ -1,6 +1,6 @@
 ## Running the example
 
-First copy the template config file `settings.yaml.template` and rename to `settings.yaml`, then fill in the relavent fields.
+First copy the template config file `settings.yaml.template` and rename to `settings.yaml`, then fill in the relevant fields.
 
 The default settings is using the CA root for trade.valorem.xyz (located at the project root, `certs/trade.valorem.xyz.pem`).
 

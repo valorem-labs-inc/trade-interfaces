@@ -1,8 +1,10 @@
+use crate::seaport_helper::transform_to_seaport_order;
 use crate::settings::Settings;
-use ethers::abi::{AbiEncode, RawLog};
+use crate::token_approvals::approve_test_tokens;
+use ethers::abi::RawLog;
 use ethers::prelude::{
-    Address, Bytes, EthLogDecode, Http, JsonRpcClient, LocalWallet, Middleware, Provider,
-    Signature, Signer, SignerMiddleware, Ws, U256,
+    Address, EthLogDecode, Http, JsonRpcClient, LocalWallet, Middleware, Provider, Signer,
+    SignerMiddleware, Ws, U256,
 };
 use http::Uri;
 use siwe::{TimeStamp, Version};
@@ -16,11 +18,13 @@ use tonic::transport::{Channel, ClientTlsConfig};
 use valorem_trade_interfaces::bindings;
 use valorem_trade_interfaces::grpc_codegen::auth_client::AuthClient;
 use valorem_trade_interfaces::grpc_codegen::rfq_client::RfqClient;
-use valorem_trade_interfaces::grpc_codegen::{Action, ItemType, QuoteRequest, H256};
+use valorem_trade_interfaces::grpc_codegen::{Action, ItemType, QuoteRequest};
 use valorem_trade_interfaces::grpc_codegen::{Empty, VerifyText};
 use valorem_trade_interfaces::utils::session_interceptor::SessionInterceptor;
 
+mod seaport_helper;
 mod settings;
+mod token_approvals;
 
 const SESSION_COOKIE_KEY: &str = "set-cookie";
 const SECONDS_IN_A_DAY: u64 = 86400u64;
@@ -108,12 +112,20 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
         approve_test_tokens(&provider, &signer, &settlement_engine, &seaport).await;
     }
 
-    // Setup the stream between us and Valorem which the gRPC connection will use.
+    // Setup the stream between us and Valorem which the RFQ connection will use.
     // Note: We don't setup any auto-reconnect functionality since we are only executing for a
     //       small amount of time. However this should be considered for an operational taker.
     let (tx_rfq, rx_rfq) = mpsc::channel::<QuoteRequest>(64);
     let mut rfq_stream = client
         .taker(tokio_stream::wrappers::ReceiverStream::new(rx_rfq))
+        .await
+        .unwrap()
+        .into_inner();
+
+    // Setup the stream between us and Valorem which the Soft Quote connection will use.
+    let (tx_quote, rx_quote) = mpsc::channel::<QuoteRequest>(64);
+    let mut quote_stream = client
+        .taker(tokio_stream::wrappers::ReceiverStream::new(rx_quote))
         .await
         .unwrap()
         .into_inner();
@@ -125,9 +137,8 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
     let gas = U256::from(500000u64);
     let gas_price = U256::from(2000).mul(U256::exp10(8usize));
 
-    // Now we have received the gRPC server's request stream - start the test case.
-    // Buy Order
-    let rfq = QuoteRequest {
+    // Lets get a quote from the maker for the option we just created.
+    let quote = QuoteRequest {
         ulid: None,
         taker_address: Some(settings.wallet.address().into()),
         item_type: ItemType::Erc1155 as i32,
@@ -139,8 +150,54 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
         seaport_address: Some(seaport_contract_address.into()),
     };
 
+    // Send a quote
+    println!();
+    println!("Sending quote to Maker for 5 Options of {option_id:?}");
+    tx_quote.send(quote.clone()).await.unwrap();
+
+    loop {
+        match quote_stream.message().await {
+            Ok(Some(quote_response)) => {
+                if quote_response.order.is_none() {
+                    println!("Maker did not wish to provide a quote on the Order.");
+                    println!();
+                    println!("Sending quote to Maker for 5 Options of {option_id:?}");
+                    tx_quote.send(quote.clone()).await.unwrap();
+                    continue;
+                }
+
+                let order = quote_response.order.unwrap();
+                let order_parameters = order.clone().unwrap();
+                println!(
+                    "Received quote from Maker. {:?} ({:?}) for {:?} options",
+                    U256::from(
+                        order_parameters.consideration[0]
+                            .start_amount
+                            .clone()
+                            .unwrap()
+                    ),
+                    Address::from(order_parameters.consideration[0].token.clone().unwrap()),
+                    U256::from(order_parameters.offer[0].start_amount.clone().unwrap()),
+                );
+                println!("We like it!");
+                break;
+            }
+            Ok(None) => {
+                panic!("Error: Soft Quote stream ended unexpectedly.");
+            }
+            Err(error) => {
+                panic!(
+                    "Error while reading from the servers request stream: {:?}",
+                    error
+                );
+            }
+        }
+    }
+
     let mut sell_rfq = false;
 
+    // Send the RFQ buy order
+    let rfq = quote.clone();
     println!();
     println!("Sending Buy RFQ to Maker for Option Type {:?}", option_id);
     tx_rfq.send(rfq.clone()).await.unwrap();
@@ -235,89 +292,6 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
                 );
             }
         }
-    }
-}
-
-// Transform the gRPC details into an ethers-rs Order structure so we can call
-// the on-chain seaport contract.
-// Note: Even though we have all the disassembled parameters the order has been
-//       pre-signed by the Maker, so if we change anything the signature will not
-//       match.
-fn transform_to_seaport_order(
-    signed_order: &valorem_trade_interfaces::grpc_codegen::SignedOrder,
-    offer_parameters: valorem_trade_interfaces::grpc_codegen::Order,
-) -> bindings::seaport::Order {
-    let signature_bytes: Signature = signed_order.signature.clone().unwrap().into();
-    let signature = Bytes::from(signature_bytes.to_vec());
-
-    let mut offer = Vec::<bindings::seaport::OfferItem>::new();
-    for offer_item in offer_parameters.offer {
-        offer.push(bindings::seaport::OfferItem {
-            item_type: offer_item.item_type as u8,
-            token: Address::from(offer_item.token.unwrap()),
-            identifier_or_criteria: U256::from(
-                offer_item.identifier_or_criteria.unwrap_or_default(),
-            ),
-            start_amount: U256::from(offer_item.start_amount.unwrap()),
-            end_amount: U256::from(offer_item.end_amount.unwrap()),
-        })
-    }
-
-    let mut consideration = Vec::<bindings::seaport::ConsiderationItem>::new();
-    for consideration_item in offer_parameters.consideration {
-        consideration.push(bindings::seaport::ConsiderationItem {
-            item_type: consideration_item.item_type as u8,
-            token: Address::from(consideration_item.token.unwrap_or_default()),
-            identifier_or_criteria: U256::from(
-                consideration_item
-                    .identifier_or_criteria
-                    .unwrap_or_default(),
-            ),
-            start_amount: U256::from(consideration_item.start_amount.unwrap()),
-            end_amount: U256::from(consideration_item.end_amount.unwrap()),
-            recipient: Address::from(consideration_item.recipient.unwrap()),
-        })
-    }
-
-    let total_original_consideration_items = U256::from(consideration.len());
-
-    let mut zone_hash: [u8; 32] = Default::default();
-    match offer_parameters.zone_hash {
-        Some(zone_hash_param) if zone_hash_param != H256::default() => {
-            // We need to transform the H256 into a U256 in order for the encode into u8 to work
-            // as we expect.
-            zone_hash.copy_from_slice(U256::from(zone_hash_param).encode().as_slice());
-        }
-        _ => zone_hash.fill(0),
-    }
-
-    let mut conduit_key: [u8; 32] = Default::default();
-    match offer_parameters.conduit_key {
-        Some(conduit_key_param) if conduit_key_param != H256::default() => {
-            // We need to transform the H256 into a U256 in order for the encode into u8 to work
-            // as we expect.
-            conduit_key.copy_from_slice(U256::from(conduit_key_param).encode().as_slice());
-        }
-        _ => conduit_key.fill(0),
-    }
-
-    let order_parameters = bindings::seaport::OrderParameters {
-        offerer: Address::from(offer_parameters.offerer.unwrap()),
-        zone: Address::from(offer_parameters.zone.unwrap_or_default()),
-        offer,
-        consideration,
-        order_type: offer_parameters.order_type as u8,
-        start_time: U256::from(offer_parameters.start_time.unwrap()),
-        end_time: U256::from(offer_parameters.end_time.unwrap()),
-        zone_hash,
-        salt: U256::from(offer_parameters.salt.unwrap()),
-        conduit_key,
-        total_original_consideration_items,
-    };
-
-    bindings::seaport::Order {
-        parameters: order_parameters,
-        signature,
     }
 }
 
@@ -514,161 +488,4 @@ async fn setup_option<P: JsonRpcClient + 'static>(
 
     eprintln!("Error: Unable to find NewOptionType event within the logs of the tx that created the option!");
     exit(1);
-}
-
-// Approve the test tokens to used within the Arbitrum testnet
-async fn approve_test_tokens<P: JsonRpcClient + 'static>(
-    provider: &Arc<Provider<P>>,
-    signer: &SignerMiddleware<Arc<Provider<P>>, LocalWallet>,
-    settlement_contract: &bindings::valorem_clear::SettlementEngine<Provider<P>>,
-    seaport_contract: &bindings::seaport::Seaport<Provider<P>>,
-) {
-    // Take gas estimation out of the equation which can be dicey on the testnet.
-    let gas = U256::from(500000u64);
-    let gas_price = U256::from(2000).mul(U256::exp10(8usize));
-
-    // Approval for the Seaport contract
-    let magic = "0xb795f8278458443f6C43806C020a84EB5109403c"
-        .parse::<Address>()
-        .unwrap();
-    let erc20_contract = bindings::erc20::Erc20::new(magic, Arc::clone(provider));
-    let mut approval_tx = erc20_contract
-        .approve(seaport_contract.address(), U256::MAX)
-        .tx;
-    approval_tx.set_gas(gas);
-    approval_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approval_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
-    println!(
-        "Approved Seaport ({:?}) to spend MAGIC ({:?})",
-        seaport_contract.address(),
-        magic
-    );
-
-    // Pre-approve all Options for Seaport (which will be the conduit in this case)
-    let mut approval_tx = settlement_contract
-        .set_approval_for_all(seaport_contract.address(), true)
-        .tx;
-    approval_tx.set_gas(gas);
-    approval_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approval_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
-    println!(
-        "Pre-approved Seaport {:?} to move option tokens",
-        seaport_contract.address()
-    );
-
-    // Token approval for the Valorem SettlementEngine
-    let usdc = "0x8FB1E3fC51F3b789dED7557E680551d93Ea9d892"
-        .parse::<Address>()
-        .unwrap();
-    let erc20_contract = bindings::erc20::Erc20::new(usdc, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settlement_contract.address(), U256::MAX)
-        .tx;
-    approve_tx.set_gas(gas);
-    approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
-    println!(
-        "Approved Settlement Engine ({:?}) to spend USDC ({:?})",
-        settlement_contract.address(),
-        usdc
-    );
-
-    let weth = "0xe39Ab88f8A4777030A534146A9Ca3B52bd5D43A3"
-        .parse::<Address>()
-        .unwrap();
-    let erc20_contract = bindings::erc20::Erc20::new(weth, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settlement_contract.address(), U256::MAX)
-        .tx;
-    approve_tx.set_gas(gas);
-    approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
-    println!(
-        "Approved Settlement Engine ({:?}) to spend WETH ({:?})",
-        settlement_contract.address(),
-        weth
-    );
-
-    let wbtc = "0xf8Fe24D6Ea205dd5057aD2e5FE5e313AeFd52f2e"
-        .parse::<Address>()
-        .unwrap();
-    let erc20_contract = bindings::erc20::Erc20::new(wbtc, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settlement_contract.address(), U256::MAX)
-        .tx;
-    approve_tx.set_gas(gas);
-    approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
-    println!(
-        "Approved Settlement Engine ({:?}) to spend WBTC ({:?})",
-        settlement_contract.address(),
-        wbtc
-    );
-
-    let gmx = "0x5337deF26Da2506e08e37682b0d6E50b26a704BB"
-        .parse::<Address>()
-        .unwrap();
-    let erc20_contract = bindings::erc20::Erc20::new(gmx, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settlement_contract.address(), U256::MAX)
-        .tx;
-    approve_tx.set_gas(gas);
-    approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
-    println!(
-        "Approved Settlement Engine ({:?}) to spend GMX ({:?})",
-        settlement_contract.address(),
-        gmx
-    );
-
-    let magic = "0xb795f8278458443f6C43806C020a84EB5109403c"
-        .parse::<Address>()
-        .unwrap();
-    let erc20_contract = bindings::erc20::Erc20::new(magic, Arc::clone(provider));
-    let mut approve_tx = erc20_contract
-        .approve(settlement_contract.address(), U256::MAX)
-        .tx;
-    approve_tx.set_gas(gas);
-    approve_tx.set_gas_price(gas_price);
-    signer
-        .send_transaction(approve_tx, None)
-        .await
-        .unwrap()
-        .await
-        .unwrap();
-    println!(
-        "Approved Settlement Engine ({:?}) to spend MAGIC ({:?})",
-        settlement_contract.address(),
-        magic
-    );
 }

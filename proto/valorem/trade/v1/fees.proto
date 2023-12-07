@@ -4,7 +4,7 @@ import "types.proto";
 
 package valorem.trade.v1;
 
-/* Service for getting Valorem Clear and Trade fee information. */
+// Service for getting Valorem Clear and Trade fee information.
 service Fees {
   // Returns the Valorem Fee structure.
   rpc getFeeStructure(Empty) returns (FeeStructure);
