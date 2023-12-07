@@ -2,22 +2,101 @@
 
 ![Valorem Trade API](img/valorem-trade-api-banner.png)
 
-## Background
+> The Valorem Trade API enables peer-to-peer, signature-based, noncustodial
+> digital asset trading via low latency [gRPC](https://grpc.io/docs/what-is-grpc/introduction/) and
+> [gRPC-web](https://github.com/grpc/grpc-web)
+> TLS-encrypted [version 3 protocol buffer](https://protobuf.dev/programming-guides/proto3/)
+> interfaces, with order settlement via
+> the [Seaport smart contracts](https://github.com/ProjectOpenSea/seaport).
+> The complete protobuf definitions can be found
+> [here](https://github.com/valorem-labs-inc/trade-interfaces/tree/main/proto/).
 
-The Valorem Trade API enables peer-to-peer, signature-based, noncustodial
-digital asset trading via low latency [gRPC](https://grpc.io/docs/what-is-grpc/introduction/) and
-[gRPC-web](https://github.com/grpc/grpc-web)
-TLS-encrypted [version 3 protocol buffer](https://protobuf.dev/programming-guides/proto3/)
-interfaces, with order settlement via
-the [Seaport smart contracts](https://github.com/ProjectOpenSea/seaport).
-The complete protobuf definitions can be found
-[here](https://github.com/valorem-labs-inc/trade-interfaces/tree/main/proto/).
+## Table of Contents
+
+- [Deployments](#deployments)
+- [Install](#install)
+- [Usage](#usage)
+- [Contributing](#contributing)
+- [License](#license)
+- [API Reference](#api-reference)
+  - [User roles](#user-roles)
+    - [Maker](#maker)
+    - [Taker](#taker)
+  - [TLS Certificate Authority](#tls-certificate-authority)
+  - [ALPN](#alpn)
+  - [Keepalives and timeouts](#keepalives-and-timeouts)
+  - [Errors and status codes](#errors-and-status-codes)
+  - [Rate limiting](#rate-limiting)
+  - [Primitive data types](#primitive-data-types)
+    - [H128](#h128)
+    - [H160](#h160)
+    - [H256](#h256)
+    - [Empty](#empty)
+    - [EthSignature](#ethsignature)
+  - [Seaport data types](#seaport-data-types)
+    - [ItemType](#itemtype)
+    - [ConsiderationItem](#considerationitem)
+    - [OfferItem](#offeritem)
+    - [OrderType](#ordertype)
+    - [Order](#order)
+    - [SignedOrder](#signedorder)
+  - [API Services](#api-services)
+    - [Health](#health)
+    - [Reflection](#reflection)
+    - [Auth service](#auth-service)
+      - [Methods](#methods)
+        - [Nonce](#nonce)
+        - [Verify](#verify)
+        - [Authenticate](#authenticate)
+        - [Session](#session)
+        - [SignOut](#signout)
+    - [Fees](#fees)
+      - [Methods](#methods-1)
+        - [getFeeStructure](#getfeestructure)
+    - [RFQ](#rfq)
+      - [Trading Valorem Clear Options](#trading-valorem-clear-options)
+      - [Authentication and authorization](#authentication-and-authorization)
+      - [Methods](#methods-2)
+        - [Taker](#taker-1)
+        - [Maker](#maker-1)
+        - [WebTaker](#webtaker)
+    - [Soft Quote](#soft-quote)
+      - [Quoting Valorem Clear Options](#quoting-valorem-clear-options)
+      - [Authentication and authorization](#authentication-and-authorization-1)
+      - [Methods](#methods-3)
+        - [Taker](#taker-2)
+        - [Maker](#maker-2)
+        - [WebTaker](#webtaker-1)
 
 ## Deployments
 
 The public endpoint for the Valorem Trade API is `https://trade.valorem.xyz`.
 
-## User roles
+## Install
+
+Protobuf has code generation for most languages. The trade-api interfaces in 
+this repository are meant to be used as low-level interfaces, leveraging 
+code generation in the language of your choice. The repository is best installed
+to your codebase as a git submodule, with a pinned version tag.
+
+## Usage
+
+Usage is spelled out in great detail at a low level in the API reference
+documentation which follows. You can also review the example clients in 
+[examples](examples/).
+
+## Contributing
+
+Contributions are welcome!
+
+## License
+
+These interfaces and examples are licensed under the MIT License. Please see
+the [LICENSE](LICENSE) file for details.
+
+## API Reference
+
+### User roles
 
 There are two principal user roles in the Valorem Trade API:
 
@@ -29,23 +108,23 @@ There are two principal user roles in the Valorem Trade API:
 - **Taker**: Takers request quotes from makers and optionally
   execute signed offers via the Seaport smart contracts.
 
-## TLS Certificate Authority
+### TLS Certificate Authority
 
 The Valorem Trade API uses the GoDaddy Root TLS certificate authority (CA) to
 issue certificates; some protobuf clients may need to add this CA, which can be
 found [here](https://github.com/valorem-labs-inc/trade-interfaces/blob/main/certs/trade.valorem.xyz.pem).
 
-## ALPN
+### ALPN
 
 The Valorem Trade API supports HTTP/2 via the `h2` ALPN protocol.
 
-## Keepalives and timeouts
+### Keepalives and timeouts
 
 The Valorem Trade API sends HTTP/2 keepalives every 75 seconds and times out
 after 10 seconds if a response is not received. Users of the API should use HTTP/2
 keepalives, and not issue TCP keepalives.
 
-## Errors and status codes
+### Errors and status codes
 
 The Valorem Trade API uses the [gRPC richer error model](https://grpc.io/docs/guides/error/#richer-error-model).
 It additionally uses [standard gRPC status codes](https://grpc.github.io/grpc/core/md_doc_statuscodes.html) to
@@ -54,18 +133,18 @@ indicate the success or failure of an API call.
 This allows the client to programmatically determine the cause of an error and
 take appropriate action.
 
-## Rate limiting
+### Rate limiting
 
 Rate limits are applied to certain services and methods in the Valorem Trade API.
 These rate limits are subject to change and are not guaranteed. Details about
 any applied rate limits can be found on the service and method documentation.
 
-## Primitive data types
+### Primitive data types
 
 The trade API defines some primitive data types mirroring a subset of
 the [Solidity ABI](https://docs.soliditylang.org/en/latest/abi-spec.html):
 
-### H128
+#### H128
 
 A 128-bit data type
 
@@ -76,7 +155,7 @@ message H128 {
 }
 ```
 
-### H160
+#### H160
 
 A 160-bit data type
 
@@ -87,7 +166,7 @@ message H160 {
 }
 ```
 
-### H256
+#### H256
 
 A 256-bit data type
 
@@ -100,7 +179,7 @@ message H256 {
 
 As well as a few utility types:
 
-### Empty
+#### Empty
 
 An empty message type
 
@@ -108,7 +187,7 @@ An empty message type
 message Empty {}
 ```
 
-### EthSignature
+#### EthSignature
 
 An Ethereum signature. [ECDSA](https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm) signatures in
 Ethereum consist of three parameters:
@@ -126,7 +205,7 @@ message EthSignature {
 }
 ```
 
-## Seaport data types
+### Seaport data types
 
 This section describes protobuf data types and messages used by the Trade API as
 they relate to Seaport.
@@ -134,7 +213,7 @@ they relate to Seaport.
 **For a full reference on the Seaport smart contracts and interfaces, see
 the [Seaport documentation](https://docs.opensea.io/reference/seaport-overview).**
 
-### ItemType
+#### ItemType
 
 The ItemType designates the type of item, with valid types being Ether
 (or other native token for the given chain),
@@ -154,7 +233,7 @@ enum ItemType {
 }
 ```
 
-### ConsiderationItem
+#### ConsiderationItem
 
 An item required in exchange for an offer.
 
@@ -169,7 +248,7 @@ message ConsiderationItem {
 }
 ```
 
-### OfferItem
+#### OfferItem
 
 An item offered in exchange for consideration.
 
@@ -201,7 +280,7 @@ message OfferItem {
   the realized amount is calculated linearly based on the time elapsed
   since the order became active.
 
-### OrderType
+#### OrderType
 
 Designates one of four types for the order depending on two distinct preferences:
 
@@ -223,7 +302,7 @@ enum OrderType {
   that a magic value indicating that the order is approved is returned upon
   calling validateOrder on the zone.
 
-### Order
+#### Order
 
 A Seaport order. Each order contains ten key components.
 
@@ -288,7 +367,7 @@ message Order {
   Seaport will then instruct that conduit to transfer the respective
   tokens.
 
-### SignedOrder
+#### SignedOrder
 
 A signed order ready for execution via Seaport.
 
@@ -299,9 +378,9 @@ message SignedOrder {
 }
 ```
 
-## API Services
+### API Services
 
-### Health
+#### Health
 
 The Valorem Trade API uses
 the [gRPC health checking protocol](https://github.com/grpc/grpc/blob/master/doc/health-checking.md)
@@ -309,13 +388,13 @@ to provide a general health check endpoint, as well as endpoints for each of the
 Health checks for each service are available via `grpc.health.v1.Health`, queryable
 by passing the Valorem service name `valorem.trade.v1.<service>`.
 
-### Reflection
+#### Reflection
 
 The Valorem Trade API uses the [gRPC reflection protocol](https://github.com/grpc/grpc/blob/master/doc/server-reflection.md)
 to provide service discovery and reflection. Reflection is available
 via `grpc.reflection.v1alpha.ServerReflection`.
 
-### Auth service
+#### Auth service
 
 The Authentication Service in Valorem Trade API enables users to authenticate
 themselves via [Sign-In with Ethereum](https://docs.login.xyz/general-information/siwe-overview) (SIWE),
@@ -338,9 +417,9 @@ service Auth {
 }
 ```
 
-#### Methods
+##### Methods
 
-##### `Nonce`
+###### `Nonce`
 
 Returns an [EIP-4361](https://eips.ethereum.org/EIPS/eip-4361) nonce for the
 session and invalidates any existing session. This method resets session cookie,
@@ -350,13 +429,13 @@ which is passed back on the request.
 rpc Nonce (Empty) returns (NonceText);
 ```
 
-###### Unary request
+*Unary request*
 
 ```protobuf
 message Empty {}
 ```
 
-###### Unary response
+*Unary response*
 
 `0 OK`
 
@@ -371,7 +450,7 @@ message NonceText {
 - `nonce` (`string`): a randomized token typically chosen by the Trade API, and
   used to prevent replay attacks, at least 8 alphanumeric characters UTF-8 encoded as plaintext.
 
-##### `Verify`
+###### `Verify`
 
 Verifies a valid SIWE message and returns the Ethereum address of the signer.
 Upon successful verification, the Auth session is updated.
@@ -380,7 +459,7 @@ Upon successful verification, the Auth session is updated.
 rpc Verify (VerifyText) returns (H160);
 ```
 
-###### Unary request
+*Unary request*
 
 ```protobuf
 message VerifyText {
@@ -401,7 +480,7 @@ Example signed and JSON encoded message:
 }
 ```
 
-###### Unary response
+*Unary response*
 
 `0 OK`
 
@@ -412,7 +491,7 @@ message H160 {
 }
 ```
 
-##### `Authenticate`
+###### `Authenticate`
 
 Checks if a given connection is authenticated and returns the authenticated
 address for an Auth session.
@@ -421,13 +500,13 @@ address for an Auth session.
 rpc Authenticate (Empty) returns (H160);
 ```
 
-###### Unary request
+Unary request*
 
 ```protobuf
 message Empty {}
 ```
 
-###### Unary response
+*Unary response*
 
 `0 OK`
 
@@ -439,7 +518,7 @@ message H160 {
 
 ```
 
-##### `Session`
+###### `Session`
 
 Returns the SIWE session information for the request's session ID. This method provides access to details of the currently authenticated session.
 
@@ -447,13 +526,13 @@ Returns the SIWE session information for the request's session ID. This method p
 rpc Session (Empty) returns (SiweSession);
 ```
 
-###### Unary request
+*Unary request*
 
 ```protobuf
 message Empty {}
 ```
 
-###### Unary response
+*Unary response*
 
 `0 OK`
 
@@ -470,7 +549,7 @@ message SiweSession {
 - `chain_id` (`H256`): The chain ID associated with the session.
 
 
-##### `SignOut`
+###### `SignOut`
 
 Invalidates the current session based on the request's session ID. This method is used to end an authenticated session, effectively signing out the user.
 
@@ -478,19 +557,19 @@ Invalidates the current session based on the request's session ID. This method i
 rpc SignOut (Empty) returns (Empty);
 ```
 
-###### Unary request
+*Unary request*
 
 ```protobuf
 rpc SignOut (Empty) returns (Empty);
 ```
 
-###### Unary response
+*Unary response*
 
 `0 OK`
 
 The request was successful, and the session has been invalidated.
 
-### Fees
+#### Fees
 
 The Fees Service in Valorem Trade API provides information about the fees which
 must be paid to use the API. The Fees service uses session cookies to store
@@ -507,9 +586,9 @@ service Fees {
 }
 ```
 
-#### Methods
+##### Methods
 
-##### `getFeeStructure`
+###### `getFeeStructure`
 
 Returns the `FeeStructure` for a user.
 
@@ -517,13 +596,13 @@ Returns the `FeeStructure` for a user.
 rpc getFeeStructure(Empty) returns (FeeStructure);
 ```
 
-###### Unary request
+*Unary request*
 
 ```protobuf
 message Empty {}
 ```
 
-###### Unary response
+*Unary response*
 
 `0 OK`
 
@@ -566,7 +645,7 @@ message TradeFees {
 - `flat` (`int32`): A flat relayer fee or rebate expressed in 1e-6 USDC (dust) - used for non-valued
   offers/considerations such as NFTs.
 
-### RFQ
+#### RFQ
 
 The RFQ (Request for Quote) service of the Valorem Trade API allows authenticated
 takers to request quotes from makers, for those makers to respond with signed
@@ -579,7 +658,7 @@ service RFQ {
 }
 ```
 
-#### Trading Valorem Clear Options
+##### Trading Valorem Clear Options
 
 These constraints must be followed to get a hard-quote for a Valorem Clear option via the RFQ:
 
@@ -610,7 +689,7 @@ These constraints must be followed to get a hard-quote for a Valorem Clear optio
 - USDC must be either the `underlying` or `exercise` asset.
 - A maker must have the liquidity to support the option.
 
-##### Fees
+###### Fees
 
 Responses from the RFQ service are subject to fees.
 Fees are determined by the maker and taker `FeeStructure` from the [Fees service](#fees-service).
@@ -634,13 +713,13 @@ For a long Valorem option sell:
   - the RFQ option long token in the correct quantity,
   - a taker fee in fee/rebate in USDC (if any).
 
-#### Authentication and authorization
+###### Authentication and authorization
 
 Only authenticated and authorized users can access the RFQ service.
 
-#### Methods
+##### Methods
 
-##### `Taker`
+###### `Taker`
 
 Request quotes from makers via a stream of `QuoteRequest` messages and receive
 a stream of `QuoteResponse` messages.
@@ -649,7 +728,7 @@ a stream of `QuoteResponse` messages.
 rpc Taker (stream QuoteRequest) returns (stream QuoteResponse);
 ```
 
-###### Request stream
+*Request stream*
 
 ```protobuf
 message QuoteRequest {
@@ -677,7 +756,7 @@ message QuoteRequest {
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-###### Response stream
+*Response stream*
 
 ```protobuf
 message QuoteResponse {
@@ -696,7 +775,7 @@ message QuoteResponse {
 - `seaport_address` (`H160`, optional): The Seaport address for the offer, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-##### `Maker`
+###### `Maker`
 
 Send quotes to takers via a stream of `QuoteResponse` messages and receive a
 stream of `QuoteRequest` messages.
@@ -705,7 +784,7 @@ stream of `QuoteRequest` messages.
 rpc Maker (stream QuoteResponse) returns (stream QuoteRequest);
 ```
 
-###### Request stream
+*Request stream*
 
 ```protobuf
 message QuoteResponse {
@@ -724,7 +803,7 @@ message QuoteResponse {
 - `seaport_address` (`H160`, optional): The Seaport address for the offer, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-###### Response stream
+*Response stream*
 
 ```protobuf
 message QuoteRequest {
@@ -752,7 +831,7 @@ message QuoteRequest {
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-##### `WebTaker`
+###### `WebTaker`
 
 Quotes from makers via a unary `QuoteRequest` message and receive a stream
 of `QuoteResponse` messages for use by gRPC-web clients such as browsers.
@@ -761,7 +840,7 @@ of `QuoteResponse` messages for use by gRPC-web clients such as browsers.
 rpc WebTaker (QuoteRequest) returns (stream QuoteResponse);
 ```
 
-###### Unary request
+*Unary request*
 
 ```protobuf
 message QuoteRequest {
@@ -789,7 +868,7 @@ message QuoteRequest {
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-###### Response stream
+*Response stream*
 
 ```protobuf
 message QuoteResponse {
@@ -808,7 +887,7 @@ message QuoteResponse {
 - `seaport_address` (`H160`, optional): The Seaport address for the offer, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-### Soft Quote
+#### Soft Quote
 
 The Soft Quote service of the Valorem Trade API allows authenticated
 takers to request soft-quotes from makers, for those makers to respond with offers at prices
@@ -820,7 +899,7 @@ service SoftQuote {
 }
 ```
 
-#### Quoting Valorem Clear Options
+##### Quoting Valorem Clear Options
 
 These constraints must be followed to get a soft-quote for a Valorem Clear option via the RFQ:
 
@@ -848,17 +927,17 @@ These constraints must be followed to get a soft-quote for a Valorem Clear optio
 - For a `Buy`, it is not less than 30 minutes until the `expiry` of the `optionId`, and the `optionId` is not expired.
 - USDC must be either the `underlying` or `exercise` asset.
 
-##### Fees
+###### Fees
 
 The soft-quote needs to consider fees as per the `RFQ`.
 
-#### Authentication and authorization
+##### Authentication and authorization
 
 Only authenticated and authorized users can access the RFQ service.
 
-#### Methods
+##### Methods
 
-##### `Taker`
+###### `Taker`
 
 Request quotes from makers via a stream of `QuoteRequest` messages and receive
 a stream of `SoftQuoteResponse` messages.
@@ -867,7 +946,7 @@ a stream of `SoftQuoteResponse` messages.
 rpc Taker (stream QuoteRequest) returns (stream SoftQuoteResponse);
 ```
 
-###### Request stream
+*Request stream*
 
 ```protobuf
 message QuoteRequest {
@@ -895,7 +974,7 @@ message QuoteRequest {
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-###### Response stream
+*Response stream*
 
 ```protobuf
 message SoftQuoteResponse {
@@ -914,7 +993,7 @@ message SoftQuoteResponse {
 - `seaport_address` (`H160`, optional): The Seaport address for the offer, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-##### `Maker`
+###### `Maker`
 
 Send quotes to takers via a stream of `SoftQuoteResponse` messages and receive a
 stream of `QuoteRequest` messages.
@@ -923,7 +1002,7 @@ stream of `QuoteRequest` messages.
 rpc Maker (stream SoftQuoteResponse) returns (stream QuoteRequest);
 ```
 
-###### Request stream
+*Request stream*
 
 ```protobuf
 message SoftQuoteResponse {
@@ -942,7 +1021,7 @@ message SoftQuoteResponse {
 - `seaport_address` (`H160`, optional): The Seaport address for the offer, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-###### Response stream
+*Response stream*
 
 ```protobuf
 message QuoteRequest {
@@ -970,7 +1049,7 @@ message QuoteRequest {
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-##### `WebTaker`
+###### `WebTaker`
 
 Quotes from makers via a unary `QuoteRequest` message and receive a stream
 of `SoftQuoteResponse` messages for use by gRPC-web clients such as browsers.
@@ -979,7 +1058,7 @@ of `SoftQuoteResponse` messages for use by gRPC-web clients such as browsers.
 rpc WebTaker (QuoteRequest) returns (stream SoftQuoteResponse);
 ```
 
-###### Unary request
+*Unary request*
 
 ```protobuf
 message QuoteRequest {
@@ -1007,7 +1086,7 @@ message QuoteRequest {
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
-###### Response stream
+*Response stream*
 
 ```protobuf
 message SoftQuoteResponse {
