@@ -20,8 +20,6 @@
 - [License](#license)
 - [API Reference](#api-reference)
   - [User roles](#user-roles)
-    - [Maker](#maker)
-    - [Taker](#taker)
   - [TLS Certificate Authority](#tls-certificate-authority)
   - [ALPN](#alpn)
   - [Keepalives and timeouts](#keepalives-and-timeouts)
