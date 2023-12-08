@@ -44,8 +44,3 @@ message SiweSession {
   H160 address = 1;
   H256 chain_id = 2;
 }
-
-// BoolResponse message contains a single field of type bool.
-message BoolResponse {
-  bool value = 1;
-}
