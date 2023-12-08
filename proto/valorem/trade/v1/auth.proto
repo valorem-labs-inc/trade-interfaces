@@ -22,6 +22,9 @@ service Auth {
 
   // Invalidates the session for the request's sessionId
   rpc SignOut (Empty) returns (Empty);
+
+  // Used to check if a given connection is geofenced. If access is restricted, returns true, otherwise false.
+  rpc Geofenced (Empty) returns (BoolResponse);
 }
 
 // Nonce response message containing the generated `nonce` string.
@@ -40,4 +43,9 @@ message VerifyText {
 message SiweSession {
   H160 address = 1;
   H256 chain_id = 2;
+}
+
+// BoolResponse message contains a single field of type bool.
+message BoolResponse {
+  bool value = 1;
 }
