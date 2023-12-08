@@ -18,6 +18,7 @@ use tonic::transport::{Channel, ClientTlsConfig};
 use valorem_trade_interfaces::bindings;
 use valorem_trade_interfaces::grpc_codegen::auth_client::AuthClient;
 use valorem_trade_interfaces::grpc_codegen::rfq_client::RfqClient;
+use valorem_trade_interfaces::grpc_codegen::soft_quote_client::SoftQuoteClient;
 use valorem_trade_interfaces::grpc_codegen::{Action, ItemType, QuoteRequest};
 use valorem_trade_interfaces::grpc_codegen::{Empty, VerifyText};
 use valorem_trade_interfaces::utils::session_interceptor::SessionInterceptor;
@@ -79,8 +80,21 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
     )
     .await;
 
-    // Now there is a valid authenticated session, connect to the RFQ stream
-    let mut client = RfqClient::with_interceptor(
+    // Now there is a valid authenticated session, connect to the gRPC streams
+    let mut rfq_client = RfqClient::with_interceptor(
+        Channel::builder(settings.valorem_endpoint.clone())
+            .tls_config(settings.tls_config.clone())
+            .unwrap()
+            .http2_keep_alive_interval(std::time::Duration::from_secs(75))
+            .connect()
+            .await
+            .unwrap(),
+        SessionInterceptor {
+            session_cookie: session_cookie.clone(),
+        },
+    );
+
+    let mut quote_client = SoftQuoteClient::with_interceptor(
         Channel::builder(settings.valorem_endpoint.clone())
             .tls_config(settings.tls_config.clone())
             .unwrap()
@@ -116,7 +130,7 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
     // Note: We don't setup any auto-reconnect functionality since we are only executing for a
     //       small amount of time. However this should be considered for an operational taker.
     let (tx_rfq, rx_rfq) = mpsc::channel::<QuoteRequest>(64);
-    let mut rfq_stream = client
+    let mut rfq_stream = rfq_client
         .taker(tokio_stream::wrappers::ReceiverStream::new(rx_rfq))
         .await
         .unwrap()
@@ -124,7 +138,7 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
 
     // Setup the stream between us and Valorem which the Soft Quote connection will use.
     let (tx_quote, rx_quote) = mpsc::channel::<QuoteRequest>(64);
-    let mut quote_stream = client
+    let mut quote_stream = quote_client
         .taker(tokio_stream::wrappers::ReceiverStream::new(rx_quote))
         .await
         .unwrap()
@@ -166,8 +180,7 @@ async fn run<P: JsonRpcClient + 'static>(provider: Arc<Provider<P>>, settings: S
                     continue;
                 }
 
-                let order = quote_response.order.unwrap();
-                let order_parameters = order.clone().unwrap();
+                let order_parameters = quote_response.order.unwrap();
                 println!(
                     "Received quote from Maker. {:?} ({:?}) for {:?} options",
                     U256::from(

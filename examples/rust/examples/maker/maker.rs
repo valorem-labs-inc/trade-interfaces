@@ -217,26 +217,6 @@ async fn run<P: JsonRpcClient + 'static>(
 
         // Setup the stream between us and Valorem which the RFQ gRPC connection will use.
         let (tx_quote_response, rx_quote_response) = mpsc::channel::<QuoteResponse>(64);
-      
-        let mut quote_stream = maker_stream.into_inner();
-
-        info!("Ready for RFQs from Takers");
-
-        // Now we have received the RFQ request stream - loop until it ends.
-        while let Ok(Some(quote)) = quote_stream.message().await {
-            // Check the chain-id is valid
-            if quote.chain_id.is_none() {
-                warn!(
-                    "Invalid RFQ request was received. No chain-id was given, ignoring the request"
-                );
-                continue;
-            }
-
-            let chain_id: U256 = quote.chain_id.clone().unwrap().into();
-            if chain_id != U256::from(421613_u64) && chain_id != U256::from(31337_u64) {
-                warn!("Chain ID: {chain_id:?} is not supported/not a testnet. Ignoring the request");
-                continue;
-            }
 
         let maker_stream = match rfq_client
             .maker(tokio_stream::wrappers::ReceiverStream::new(
