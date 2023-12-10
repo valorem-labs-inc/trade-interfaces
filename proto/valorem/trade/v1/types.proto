@@ -41,10 +41,5 @@ message EthSignature {
   bytes v = 3;
 }
 
-// BoolResponse message contains a single field of type bool.
-message BoolResponse {
-  bool value = 1;
-}
-
 // The empty message
 message Empty {}

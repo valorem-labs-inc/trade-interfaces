@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "types.proto";
+import "google/protobuf/wrappers.proto";
 
 package valorem.trade.v1;
 
@@ -18,7 +19,7 @@ service Auth {
   rpc Authenticate (Empty) returns (H160);
 
   // Used to check if a given connection is geofenced. If access is restricted, returns true, otherwise false.
-  rpc Geofenced (Empty) returns (BoolResponse);
+  rpc Geofenced (Empty) returns (google.protobuf.BoolValue);
 
   // Returns the SIWE Session for the request's sessionId
   rpc Session (Empty) returns (SiweSession);
