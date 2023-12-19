@@ -34,9 +34,9 @@ message SpotPriceRequest {
 // SpotPriceResponse provides the fetched spot prices for the tokens specified in the request.
 message SpotPriceResponse {
 
-  // spot_price_info holds the data about the fetched spot prices for each of the
-  // tokens specified in the request.
-  repeated SpotPriceInfo spot_price_info = 1;
+  // spot_price_info holds the data about the fetched spot prices for the tokens specified in the request. The price for
+  // each token is sent down the stream as and when it is ready.
+  SpotPriceInfo spot_price_info = 1;
 }
 
 // SpotPriceInfo represents the details and the spot price (if available) for a single token
