@@ -473,7 +473,7 @@ Example signed and JSON encoded message:
 
 ```json
 {
-  "message": "app.valorem.xyz wants you to sign in with your Ethereum account:\n<wallet>\n\nI accept the Valorem Terms of Service at https://app.valorem.xyz/tos and Privacy Policy at https://app.valorem.xyz/privacy\n\nURI: https://app.valorem.xyz\nVersion: 1\nChain ID: 421613\nNonce: <nonce>\nIssued At: 2023-06-10T03:37:23.858Z",
+  "message": "app.valorem.xyz wants you to sign in with your Ethereum account:\n<wallet>\n\nI accept the Valorem Terms of Service at https://app.valorem.xyz/tos and Privacy Policy at https://app.valorem.xyz/privacy\n\nURI: https://app.valorem.xyz\nVersion: 1\nChain ID: 421614\nNonce: <nonce>\nIssued At: 2023-06-10T03:37:23.858Z",
   "signature": "<ECDSA signature signing the message>"
 }
 ```
@@ -666,7 +666,7 @@ These constraints must be followed to get a hard-quote for a Valorem Clear optio
 - The `amount` must not `None` and non-zero (i.e. you are looking to buy/sell options).
 - The `action` must be `Buy` or `Sell`.
 - The `seaport_address` must be set to seaport 1.5 (`0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`, which is version 1.5).
-- The `chain_id` is supported (i.e. either Arbitrum One `42161`, or Arbitrum Goerli `421613`).
+- The `chain_id` is supported (i.e. either Arbitrum One `42161`, or Arbitrum Sepolia `421614`).
 - The given `optionId` is an `Option` and not a `Claim` or `None` (this is
   determined by calling the `token_type` function on the Clear contract).
 - The given `optionId` exists (i.e., somebody has called `newOptionType` on the
@@ -750,7 +750,7 @@ message QuoteRequest {
 - `amount` (`H256`): The amount of the item.
 - `action` (`Action`): The action (`BUY` or `SELL`) for the quote request.
 - `chain_id` (`H256`, optional): The chain ID for the quote request. Must specify a supported chain.
-  Supported chains are `[42161, 421613]`. Defaults to `421613`.
+  Supported chains are `[42161, 421614]`. Defaults to `421614`.
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
@@ -825,7 +825,7 @@ message QuoteRequest {
 - `amount` (`H256`): The amount of the item.
 - `action` (`Action`): The action (`BUY` or `SELL`) for the quote request.
 - `chain_id` (`H256`, optional): The chain ID for the quote request. Must specify a supported chain.
-  Supported chains are `[42161, 421613]`. Defaults to `421613`.
+  Supported chains are `[42161, 421614]`. Defaults to `421614`.
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
@@ -862,7 +862,7 @@ message QuoteRequest {
 - `amount` (`H256`): The amount of the item.
 - `action` (`Action`): The action (`BUY` or `SELL`) for the quote request.
 - `chain_id` (`H256`, optional): The chain ID for the quote request. Must specify a supported chain.
-  Supported chains are `[42161, 421613]`. Defaults to `421613`.
+  Supported chains are `[42161, 421614]`. Defaults to `421614`.
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
@@ -904,7 +904,7 @@ These constraints must be followed to get a soft-quote for a Valorem Clear optio
 - The `token_address` must be `0x402A401B1944EBb5A3030F36Aa70d6b5794190c9`
 - The `identifier_or_criteria` must be the `optionId` of the long options token.
 - The `amount` must not `None` and non-zero (i.e. you are looking to buy/sell).
-- The `chain_id` is supported (i.e. either Arbitrum One `42161`, or Arbitrum Goerli `421613`).
+- The `chain_id` is supported (i.e. either Arbitrum One `42161`, or Arbitrum Goerli `421614`).
 - The `action` is `Buy` or `Sell`.
 - The given `optionId` is an `Option` and not a `Claim` or `None` (this is
   determined by calling the `token_type` function on the Clear contract).
@@ -968,7 +968,7 @@ message QuoteRequest {
 - `amount` (`H256`): The amount of the item.
 - `action` (`Action`): The action (`BUY` or `SELL`) for the quote request.
 - `chain_id` (`H256`, optional): The chain ID for the quote request. Must specify a supported chain.
-  Supported chains are `[42161, 421613]`. Defaults to `421613`.
+  Supported chains are `[42161, 421614]`. Defaults to `421614`.
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
@@ -1043,7 +1043,7 @@ message QuoteRequest {
 - `amount` (`H256`): The amount of the item.
 - `action` (`Action`): The action (`BUY` or `SELL`) for the quote request.
 - `chain_id` (`H256`, optional): The chain ID for the quote request. Must specify a supported chain.
-  Supported chains are `[42161, 421613]`. Defaults to `421613`.
+  Supported chains are `[42161, 421614]`. Defaults to `421614`.
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 
@@ -1080,7 +1080,7 @@ message QuoteRequest {
 - `amount` (`H256`): The amount of the item.
 - `action` (`Action`): The action (`BUY` or `SELL`) for the quote request.
 - `chain_id` (`H256`, optional): The chain ID for the quote request. Must specify a supported chain.
-  Supported chains are `[42161, 421613]`. Defaults to `421613`.
+  Supported chains are `[42161, 421614]`. Defaults to `421614`.
 - `seaport_address` (`H160`, optional): The Seaport address for the quote request, defaults
   to `0x00000000000000ADc04C56Bf30aC9d3c0aAF14dC`.
 

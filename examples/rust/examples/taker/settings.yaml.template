@@ -11,7 +11,7 @@ approve_tokens: false
 
 # The chain_id setting determines which chain to use. By default, the setting is configured for the Arbitrum Goerli testnet
 # To switch to the Arbitrum Mainnet, change the value to 42161
-chain_id: 421613
+chain_id: 421614
 
 # Keystore is an optional setting. If not given a private key will need to be provided on startup
 #keystore: "/path/to/keystore.ks"
