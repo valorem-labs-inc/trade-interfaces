@@ -18,7 +18,7 @@ pub async fn approve_tokens<P: JsonRpcClient + 'static>(
     let gas_price = U256::from(200).mul(U256::exp10(8usize));
 
     // Approval for the Seaport contract
-    let erc20_contract = bindings::erc20::Erc20::new(settings.magic_address, Arc::clone(provider));
+    let erc20_contract = bindings::erc20::Erc20::new(settings.usdc_address, Arc::clone(provider));
     let mut approval_tx = erc20_contract
         .approve(seaport_contract.address(), U256::MAX)
         .tx;
@@ -31,9 +31,9 @@ pub async fn approve_tokens<P: JsonRpcClient + 'static>(
         .await
         .unwrap();
     info!(
-        "Approved Seaport ({:?}) to spend MAGIC ({:?})",
+        "Approved Seaport ({:?}) to spend USDC ({:?})",
         seaport_contract.address(),
-        settings.magic_address
+        settings.usdc_address
     );
 
     // Pre-approve all Options for Seaport

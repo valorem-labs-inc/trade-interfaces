@@ -250,7 +250,7 @@ async fn run<P: JsonRpcClient + 'static>(
 
                         let chain_id: U256 = quote.chain_id.clone().unwrap().into();
                         if chain_id != U256::from(421614_u64) && chain_id != U256::from(31337_u64) {
-                            warn!("RFQ request was not on the testnet chain. Ignoring the request");
+                            warn!("RFQ request was not on the testnet chain ({:?}). Ignoring the request", chain_id);
                             continue;
                         }
 
@@ -288,9 +288,9 @@ async fn run<P: JsonRpcClient + 'static>(
                         }
 
                         let chain_id: U256 = quote.chain_id.clone().unwrap().into();
-                        if chain_id != U256::from(421614_u64) || chain_id != U256::from(31337_u64) {
-                            warn!("Soft Quote request was not on the testnet chain. Ignoring the request");
-                            continue;
+                        if chain_id != U256::from(421614_u64) && chain_id != U256::from(31337_u64) {
+                            warn!("Soft Quote request was not on the testnet chain ({:?}). Ignoring the request", chain_id);
+                            continue; 
                         }
 
                         let quote_offer = if validate_soft_quote(quote.clone()).is_none() {
