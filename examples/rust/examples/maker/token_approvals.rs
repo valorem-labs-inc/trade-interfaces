@@ -14,8 +14,8 @@ pub async fn approve_tokens<P: JsonRpcClient + 'static>(
     // Note: This approval logic is tied to what the example Taker is doing and may need to
     //       to be updated for your example
     // Take gas estimation out of the equation which can be dicey on the Arbitrum testnet.
-    let gas = U256::from(500000u64);
-    let gas_price = U256::from(200).mul(U256::exp10(8usize));
+    let gas = U256::from(900000u64);
+    let gas_price = U256::from(300).mul(U256::exp10(8usize));
 
     // Approval for the Seaport contract
     let erc20_contract = bindings::erc20::Erc20::new(settings.usdc_address, Arc::clone(provider));
