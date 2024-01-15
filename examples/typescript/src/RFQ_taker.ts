@@ -1,12 +1,6 @@
-import {
-  Address,
-  createPublicClient,
-  createWalletClient,
-  http,
-  parseUnits,
-} from 'viem';
+import { createPublicClient, createWalletClient, http, parseUnits } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { arbitrumGoerli } from 'viem/chains';
+import { arbitrumSepolia } from 'viem/chains';
 import {
   ERC20Contract,
   ParsedQuoteResponse,
@@ -18,6 +12,7 @@ import {
   trackCookieInterceptor,
   Auth,
   RFQ,
+  SupportedAsset,
 } from '@valorem-labs-inc/sdk';
 import { createPromiseClient } from '@connectrpc/connect';
 import { createGrpcTransport } from '@connectrpc/connect-node';
@@ -31,12 +26,12 @@ const PRIVATE_KEY =
 const account = privateKeyToAccount(PRIVATE_KEY);
 
 const publicClient = createPublicClient({
-  chain: arbitrumGoerli,
+  chain: arbitrumSepolia,
   transport: http(),
 });
 const walletClient = createWalletClient({
   account,
-  chain: arbitrumGoerli,
+  chain: arbitrumSepolia,
   transport: http(),
 });
 
@@ -64,14 +59,14 @@ const valoremSDK = new ValoremSDK({
 // get the WebTaker instance (essentially a wallet/account/signer, with some utility methods)
 const webTaker = valoremSDK.webTaker;
 
-// Our mock tokens on Arbitrum Goerli
-const USDC_ADDRESS: Address = '0x8ae0eeedd35dbefe460df12a20823efde9e03458';
-const WETH_ADDRESS: Address = '0x618b9a2db0cf23bb20a849daa2963c72770c1372';
+// Our mock tokens on Arbitrum Sepolia
+const USDC = SupportedAsset.fromSymbolAndChainId('USDC', 421614);
+const WETH = SupportedAsset.fromSymbolAndChainId('WETH', 421614);
 
 // contract instances
 const clearinghouse = valoremSDK.clearinghouse;
 const usdc = new ERC20Contract({
-  address: USDC_ADDRESS,
+  address: USDC.address,
   publicClient,
   walletClient,
 });
@@ -95,10 +90,10 @@ async function authenticate() {
 // 2. Initialize an option with Valorem Clearinghouse
 async function createOptionType() {
   // Configure your own option type here!
-  const underlyingAsset = WETH_ADDRESS;
-  const exerciseAsset = USDC_ADDRESS;
+  const underlyingAsset = WETH.address;
+  const exerciseAsset = USDC.address;
   const underlyingAmount = 1000000000000n; // 1 WETH, divided by 1e6
-  const exerciseAmount = 1575n; // 1575 USDC, divided by 1e6
+  const exerciseAmount = 2500n; // 2500 USDC, divided by 1e6
   const { exerciseTimestamp, expiryTimestamp } = get24HrTimestamps();
 
   const optionInfo = {
