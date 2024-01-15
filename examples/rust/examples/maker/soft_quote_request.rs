@@ -43,7 +43,7 @@ pub fn validate_soft_quote(rfq: QuoteRequest) -> Option<QuoteRequest> {
 
     // Action needs to be valid
     let action: Action = rfq.action.into();
-    if action != Action::Buy {
+    if action != Action::Buy && action != Action::Sell {
         warn!("Received a RFQ with an invalid action.");
         return None;
     }
@@ -90,8 +90,33 @@ pub async fn handle_soft_quote_request<P: JsonRpcClient + 'static>(
 
             (option, price)
         }
+        Action::Sell => {
+            let option_id = U256::from(request_for_quote.identifier_or_criteria.clone().unwrap());
+            info!("Handling Sell Order for Option Id {:?}", option_id);
+
+            // We are offering the following price for the given option
+            let price = OfferItem {
+                item_type: i32::from(ItemType::Erc20 as u8),
+                token: Some(usdc_address.into()),
+                identifier_or_criteria: None,
+                start_amount: Some(U256::from(fee).mul(U256::exp10(6usize)).into()),
+                end_amount: Some(U256::from(fee).mul(U256::exp10(6usize)).into()),
+            };
+
+            // The option we want in return
+            let option = ConsiderationItem {
+                item_type: i32::from(ItemType::Erc1155 as u8),
+                token: Some(settlement_engine.address().into()),
+                identifier_or_criteria: Some(option_id.into()),
+                start_amount: request_for_quote.amount.clone(),
+                end_amount: request_for_quote.amount.clone(),
+                recipient: Some(signer.address().into()),
+            };
+
+            (price, option)
+        }
         _ => {
-            info!("Received invalid action from the RFQ, returning no offer");
+            info!("Received invalid action {:?} from the RFQ, returning no offer", request_action);
             let no_offer = create_soft_quote_no_offer(&request_for_quote, signer);
             return Some(no_offer);
         }

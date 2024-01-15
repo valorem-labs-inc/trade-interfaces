@@ -9,7 +9,7 @@
     "@bufbuild/protobuf": "^1.2.1",
     "@connectrpc/connect": "^1.1.2",
     "@connectrpc/connect-node": "^1.1.2",
-    "@valorem-labs-inc/sdk": "0.0.2-alpha.0",
+    "@valorem-labs-inc/sdk": "0.0.11",
     "@wagmi/core": "^1.4.4",
     "tsx": "^3.14.0",
     "typescript": "^5.0.4",
