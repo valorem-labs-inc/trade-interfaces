@@ -672,7 +672,7 @@ These constraints must be followed to get a hard-quote for a Valorem Clear optio
 - The given `optionId` exists (i.e., somebody has called `newOptionType` on the
   Clear contract to create the `optionId`).
 - The maker supports the `exercise` and `underlying` tokens:
-  - Presently for Arbitrum One: USDC.e (`0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8`),
+  - Presently for Arbitrum One: Native USDC (`0xaf88d065e77c8cC2239327C5EDb3A432268e5831`),
     and WETH (`0x82aF49447D8a07e3bd95BD0d56f35241523fBab1`).
   - For testnet: USDC (`0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458`),
     MAGIC (`0xb795f8278458443f6C43806C020a84EB5109403c`),
@@ -911,7 +911,7 @@ These constraints must be followed to get a soft-quote for a Valorem Clear optio
 - The given `optionId` exists (i.e., somebody has called `newOptionType` on the
   Clear contract to create the `optionId`).
 - The maker supports the `exercise` and `underlying` tokens:
-  - Presently for Arbitrum One: USDC.e (`0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8`),
+  - Presently for Arbitrum One: Native USDC (`0xaf88d065e77c8cC2239327C5EDb3A432268e5831`),
     and WETH (`0x82aF49447D8a07e3bd95BD0d56f35241523fBab1`).
   - For Arbitrum One Goerli testnet: USDC (`0x8AE0EeedD35DbEFe460Df12A20823eFDe9e03458`),
     MAGIC (`0xb795f8278458443f6C43806C020a84EB5109403c`),
