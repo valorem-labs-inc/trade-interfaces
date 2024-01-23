@@ -5,43 +5,33 @@ import "types.proto";
 
 package valorem.trade.v1;
 
-// The FeaturedInstruments service offers live streams of the featured instruments for provided asset pairs.
+// The FeaturedInstruments service offers live streams of featured instruments for provided asset pairs.
 service FeaturedInstruments {
-  // Streams the featured option types for specified asset pairs. Option types are returned for a pair on the stream
-  // roughly once per block.
-  rpc GetOptionTypes (OptionTypesRequest) returns (stream OptionTypes);
+  // Streams the featured options for specified asset pairs. Featured options are returned on the stream
+  // roughly once per block for each pair.
+  rpc GetFeaturedOptions (FeaturedOptionsRequest) returns (stream AssetPairOptions);
 }
 
-message OptionTypesRequest {
-  // List of asset pairs to get featured options for.
-  repeated OptionTypes option_types = 1;
+message FeaturedOptionsRequest {
+  repeated AssetPairOptions asset = 1; // List of asset pairs to get featured options for.
 }
 
-message OptionTypes {
-  // The specific chain on which the tokens are located.
-  uint64 chain_id = 1;
-
-  // Pair of ERC20 tokens to retrieve all featured options for.
-  AssetPair asset_pair = 2;
-
-  // List of featured option types encoded as option_ids, along with a flag to determine if the option already exists
-  // with the clearing house.
-  // Reused message, leave empty for requests.
-  repeated OptionId option_id = 3;
+// Reused message for request and responses; leave featured_options empty for requests.
+message AssetPairOptions {
+  uint64 chain_id = 1; // The specific chain on which the tokens are located.
+  AssetPair asset_pair = 2; // Pair of ERC20 tokens to retrieve featured options for.
+  repeated Option featured_options = 3; // List of featured option types with existence flag.
 }
 
 // Underlying and exercise ERC20 asset pair for which to retrieve instruments for.
 // Note the order of tokens does not matter here.
 message AssetPair {
-  H160 token1 = 1;
-  H160 token2 = 2;
+  H160 token_a = 1;
+  H160 token_b = 2;
 }
 
 // Option id with created flag.
-message OptionId {
-  // Option type encoded as option_id.
-  H256 option_id = 1;
-
-  // True if option type already exists with the clearing house.
-  bool created = 2;
+message Option {
+  H256 id = 1; // Option type encoded as option_id.
+  bool created = 2; // True if option type already exists with the clearing house.
 }
