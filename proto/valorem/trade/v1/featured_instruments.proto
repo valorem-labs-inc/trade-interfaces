@@ -5,10 +5,19 @@ import "types.proto";
 
 package valorem.trade.v1;
 
-// The FeaturedInstruments service offers live streams of featured instruments for provided asset pairs.
+// The FeaturedInstruments service offers related methods to retrieve information about the Valorem's
+// currently featured instruments.
 service FeaturedInstruments {
-  // Streams the featured options for specified asset pairs. Featured options are returned on the stream
-  // roughly once per block for each pair.
+  // GetFeaturedOptions is a server-streaming RPC. It provides real-time featured options
+  // for for specified asset pairs across multiple chains.
+  //
+  // Parameters:
+  //   SpotPriceRequest: Contains information about which tokens' instruments
+  //                     should be fetched on their respective chains.
+  // Returns:
+  //   stream of AssetPairOptions: Continuously streams data about the featured options
+  //                               of the requested tokens on their respective chains
+  //                               as updates are available.
   rpc GetFeaturedOptions (FeaturedOptionsRequest) returns (stream AssetPairOptions);
 }
 
