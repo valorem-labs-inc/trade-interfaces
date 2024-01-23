@@ -12,8 +12,8 @@ service FeaturedInstruments {
   // for for specified asset pairs across multiple chains.
   //
   // Parameters:
-  //   SpotPriceRequest: Contains information about which tokens' instruments
-  //                     should be fetched on their respective chains.
+  //   FeaturedOptionsRequest: Contains information about which tokens' instruments
+  //                           should be fetched on their respective chains.
   // Returns:
   //   stream of AssetPairOptions: Continuously streams data about the featured options
   //                               of the requested tokens on their respective chains
@@ -22,10 +22,12 @@ service FeaturedInstruments {
 }
 
 message FeaturedOptionsRequest {
-  repeated AssetPairOptions asset = 1; // List of asset pairs to get featured options for.
+  repeated AssetPairOptions asset = 1; // List of asset pairs to get featured data for.
 }
 
-// Reused message for request and responses; leave featured_options empty for requests.
+// AssetPairOptions represents the details and the featured options (if available) for a token pair
+// on a particular blockchain.
+// Note reused message for request and responses, leave featured_options empty for requests.
 message AssetPairOptions {
   uint64 chain_id = 1; // The specific chain on which the tokens are located.
   AssetPair asset_pair = 2; // Pair of ERC20 tokens to retrieve featured options for.
