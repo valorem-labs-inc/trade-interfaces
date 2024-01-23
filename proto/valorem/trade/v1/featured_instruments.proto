@@ -27,7 +27,7 @@ message OptionTypes {
   // List of featured option types encoded as option_ids, along with a flag to determine if the option already exists
   // with the clearing house.
   // Reused message, leave empty for requests.
-  repeated OptionId option_id = 5;
+  repeated OptionId option_id = 3;
 }
 
 // Underlying and exercise ERC20 asset pair for which to retrieve instruments for.
