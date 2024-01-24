@@ -5,9 +5,9 @@ import "types.proto";
 
 package valorem.trade.v1;
 
-// The FeaturedInstruments service offers related methods to retrieve information about the Valorem's
+// The Instruments service offers related methods to retrieve information about the Valorem's
 // currently featured instruments.
-service FeaturedInstruments {
+service Instruments {
   // GetFeaturedOptions is a server-streaming RPC. It provides real-time featured options
   // for for specified asset pairs across multiple chains.
   //
@@ -21,6 +21,13 @@ service FeaturedInstruments {
   rpc GetFeaturedOptions (FeaturedOptionsRequest) returns (stream AssetPairOptions);
 }
 
+// Underlying and exercise ERC20 asset pair for which to retrieve instruments for.
+// Note the order of tokens does not matter here.
+message AssetPair {
+  H160 token_a = 1;
+  H160 token_b = 2;
+}
+
 message FeaturedOptionsRequest {
   repeated AssetPairOptions asset = 1; // List of asset pairs to get featured data for.
 }
@@ -32,13 +39,6 @@ message AssetPairOptions {
   uint64 chain_id = 1; // The specific chain on which the tokens are located.
   AssetPair asset_pair = 2; // Pair of ERC20 tokens to retrieve featured options for.
   repeated Option featured_options = 3; // List of featured option types with existence flag.
-}
-
-// Underlying and exercise ERC20 asset pair for which to retrieve instruments for.
-// Note the order of tokens does not matter here.
-message AssetPair {
-  H160 token_a = 1;
-  H160 token_b = 2;
 }
 
 // Option id with created flag.
