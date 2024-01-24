@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+// Import additional EVM data types types.
+import "types.proto";
+
+package valorem.trade.v1;
+
+// The Instruments service offers related methods to retrieve information about the Valorem's
+// currently featured instruments.
+service Instruments {
+  // GetFeaturedOptions is a server-streaming RPC. It provides real-time featured options
+  // for for specified asset pairs across multiple chains.
+  //
+  // Parameters:
+  //   FeaturedOptionsRequest: Contains information about which tokens' instruments
+  //                           should be fetched on their respective chains.
+  // Returns:
+  //   stream of AssetPairOptions: Continuously streams data about the featured options
+  //                               of the requested tokens on their respective chains
+  //                               as updates are available.
+  rpc GetFeaturedOptions (FeaturedOptionsRequest) returns (stream AssetPairOptions);
+}
+
+// Underlying and exercise ERC20 asset pair for which to retrieve instruments for.
+// Note the order of tokens does not matter here.
+message AssetPair {
+  H160 token_a = 1;
+  H160 token_b = 2;
+}
+
+message FeaturedOptionsRequest {
+  repeated AssetPairOptions pairs = 1; // List of asset pairs to get featured data for.
+}
+
+// AssetPairOptions represents the details and the featured options (if available) for a token pair
+// on a particular blockchain.
+// Note reused message for request and responses, leave featured_options empty for requests.
+message AssetPairOptions {
+  uint64 chain_id = 1; // The specific chain on which the tokens are located.
+  AssetPair asset_pair = 2; // Pair of ERC20 tokens to retrieve featured options for.
+  repeated Option featured_options = 3; // List of featured option types with existence flag.
+}
+
+// Option id with created flag.
+message Option {
+  H256 id = 1; // Option type encoded as option_id.
+  bool created = 2; // True if option type already exists with the clearing house.
+}
