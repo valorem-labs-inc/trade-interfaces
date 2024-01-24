@@ -29,7 +29,7 @@ message AssetPair {
 }
 
 message FeaturedOptionsRequest {
-  repeated AssetPairOptions asset = 1; // List of asset pairs to get featured data for.
+  repeated AssetPairOptions pairs = 1; // List of asset pairs to get featured data for.
 }
 
 // AssetPairOptions represents the details and the featured options (if available) for a token pair
